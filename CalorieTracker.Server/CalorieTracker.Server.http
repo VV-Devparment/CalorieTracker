@@ -1,0 +1,6 @@
+@CalorieTracker.Server_HostAddress = http://localhost:5208
+
+GET {{CalorieTracker.Server_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

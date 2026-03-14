@@ -1,0 +1,82 @@
+﻿@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+/* Custom styles */
+.container {
+    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+}
+
+.btn {
+    @apply px-4 py-2 rounded-md font-medium transition-colors duration-200;
+}
+
+.btn-primary {
+    @apply bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2;
+}
+
+.btn-secondary {
+    @apply bg-gray-200 text-gray-900 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2;
+}
+
+.btn-danger {
+    @apply bg-red-600 text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2;
+}
+
+.btn-success {
+    @apply bg-green-600 text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2;
+}
+
+.input {
+    @apply block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500;
+}
+
+.card {
+    @apply bg-white rounded-lg shadow-md p-6;
+}
+
+.meal-type-breakfast {
+    @apply bg-yellow-100 border-yellow-300;
+}
+
+.meal-type-lunch {
+    @apply bg-green-100 border-green-300;
+}
+
+.meal-type-dinner {
+    @apply bg-blue-100 border-blue-300;
+}
+
+.meal-type-snack {
+    @apply bg-purple-100 border-purple-300;
+}
+
+/* Loading animation */
+.spinner {
+    @apply animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600;
+}
+
+/* Responsive table */
+.table-responsive {
+    @apply min-w-full overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg;
+}
+
+.table {
+    @apply min-w-full divide-y divide-gray-300;
+}
+
+.table-header {
+    @apply bg-gray-50;
+}
+
+    .table-header th {
+        @apply px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider;
+    }
+
+.table-body {
+    @apply bg-white divide-y divide-gray-200;
+}
+
+    .table-body td {
+        @apply px-6 py-4 whitespace-nowrap text-sm text-gray-900;
+    }
