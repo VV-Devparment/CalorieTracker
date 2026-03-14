@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Unicode;
+using System.Linq;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -21,8 +22,17 @@ builder.Services.AddControllers()
     });
 
 // Configure Entity Framework
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+var rawConnectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? "";
+// Strip unsupported Npgsql 9 parameters from connection string
+var cleanedConnectionString = string.Join(";", rawConnectionString
+    .Split(';')
+    .Where(part => !part.Trim().StartsWith("Trust Server Certificate", StringComparison.OrdinalIgnoreCase)));
+
+var dataSourceBuilder = new Npgsql.NpgsqlDataSourceBuilder(cleanedConnectionString);
+dataSourceBuilder.RemoteCertificateValidationCallback((_, _, _, _) => true);
+var dataSource = dataSourceBuilder.Build();
+
+builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(dataSource));
 
 // Configure CORS for React app
 builder.Services.AddCors(options =>
