@@ -16,7 +16,7 @@ import type {
 } from '../types';
 
 // Base API configuration
-const API_BASE_URL = 'https://localhost:7100/api';
+const API_BASE_URL = import.meta.env.DEV ? 'https://localhost:7100/api' : '/api';
 
 const api = axios.create({
     baseURL: API_BASE_URL,
