@@ -21,7 +21,7 @@ namespace CalorieTracker.Server.Models
 
         public int? Age { get; set; }
 
-        public decimal? Weight { get; set; } // в кг
+        // Weight removed — current weight is derived from the latest WeightRecord (3NF)
 
         public decimal? Height { get; set; } // в см
 
@@ -30,7 +30,7 @@ namespace CalorieTracker.Server.Models
 
         public int ActivityLevel { get; set; } = 1; // 1-5
 
-        public int? DailyCalorieGoal { get; set; }
+        // DailyCalorieGoal removed — computed from (Age, Height, Gender, ActivityLevel, currentWeight) (3NF)
 
         public DateTime CreatedAt { get; set; }
 

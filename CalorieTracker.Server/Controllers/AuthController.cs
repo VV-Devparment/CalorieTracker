@@ -37,32 +37,19 @@ namespace CalorieTracker.Server.Controllers
                 Console.WriteLine($"[REGISTER] Створюємо нового користувача: {dto.Name}");
 
                 // Створюємо нового користувача
+                // Weight and DailyCalorieGoal are NOT stored in Users (3NF)
                 var user = new User
                 {
                     Email = dto.Email,
                     PasswordHash = _authService.HashPassword(dto.Password),
                     Name = dto.Name,
                     Age = dto.Age,
-                    Weight = dto.Weight,
                     Height = dto.Height,
                     Gender = dto.Gender,
                     ActivityLevel = dto.ActivityLevel,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
                 };
-
-                // Розраховуємо денну норму калорій
-                if (dto.Age.HasValue && dto.Weight.HasValue && dto.Height.HasValue && !string.IsNullOrEmpty(dto.Gender))
-                {
-                    user.DailyCalorieGoal = CalculateDailyCalorieGoal(
-                        dto.Age.Value,
-                        dto.Weight.Value,
-                        dto.Height.Value,
-                        dto.Gender,
-                        dto.ActivityLevel
-                    );
-                    Console.WriteLine($"[REGISTER] Розрахована денна норма: {user.DailyCalorieGoal} ккал");
-                }
 
                 Console.WriteLine("[REGISTER] Додаємо користувача до контексту");
                 _context.Users.Add(user);
@@ -76,11 +63,33 @@ namespace CalorieTracker.Server.Controllers
                 if (savedUser != null)
                 {
                     Console.WriteLine($"[REGISTER] Користувач знайдений в БД з ID: {savedUser.Id}");
-                    user.Id = savedUser.Id; // Оновлюємо ID
+                    user.Id = savedUser.Id;
                 }
                 else
                 {
                     Console.WriteLine("[REGISTER] ПОМИЛКА: Користувач не знайдений в БД після збереження!");
+                }
+
+                // If weight was provided at registration, create an initial WeightRecord (3NF)
+                if (dto.Weight.HasValue)
+                {
+                    _context.WeightRecords.Add(new WeightRecord
+                    {
+                        UserId = user.Id,
+                        Weight = dto.Weight.Value,
+                        RecordDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                        CreatedAt = DateTime.UtcNow
+                    });
+                    await _context.SaveChangesAsync();
+                    Console.WriteLine($"[REGISTER] Створено початковий запис ваги: {dto.Weight.Value} кг");
+                }
+
+                // DailyCalorieGoal is computed, not stored (3NF)
+                int? dailyCalorieGoal = null;
+                if (dto.Age.HasValue && dto.Weight.HasValue && dto.Height.HasValue && !string.IsNullOrEmpty(dto.Gender))
+                {
+                    dailyCalorieGoal = CalculateDailyCalorieGoal(dto.Age.Value, dto.Weight.Value, dto.Height.Value, dto.Gender, dto.ActivityLevel);
+                    Console.WriteLine($"[REGISTER] Розрахована денна норма: {dailyCalorieGoal} ккал");
                 }
 
                 Console.WriteLine($"[REGISTER] ID нового користувача: {user.Id}");
@@ -97,11 +106,11 @@ namespace CalorieTracker.Server.Controllers
                         Email = user.Email,
                         Name = user.Name,
                         Age = user.Age,
-                        Weight = user.Weight,
+                        Weight = dto.Weight,
                         Height = user.Height,
                         Gender = user.Gender,
                         ActivityLevel = user.ActivityLevel,
-                        DailyCalorieGoal = user.DailyCalorieGoal,
+                        DailyCalorieGoal = dailyCalorieGoal,
                         CreatedAt = user.CreatedAt
                     }
                 };
@@ -139,6 +148,21 @@ namespace CalorieTracker.Server.Controllers
                 // Генеруємо JWT токен
                 var token = _authService.GenerateJwtToken(user);
 
+                // Current weight from WeightRecord (3NF — not stored in Users)
+                var latestWeightRecord = await _context.WeightRecords
+                    .Where(wr => wr.UserId == user.Id)
+                    .OrderByDescending(wr => wr.RecordDate)
+                    .FirstOrDefaultAsync();
+
+                decimal? currentWeight = latestWeightRecord?.Weight;
+
+                // DailyCalorieGoal computed, not stored (3NF)
+                int? dailyCalorieGoal = null;
+                if (user.Age.HasValue && currentWeight.HasValue && user.Height.HasValue && !string.IsNullOrEmpty(user.Gender))
+                {
+                    dailyCalorieGoal = CalculateDailyCalorieGoal(user.Age.Value, currentWeight.Value, user.Height.Value, user.Gender, user.ActivityLevel);
+                }
+
                 var response = new AuthResponseDto
                 {
                     Token = token,
@@ -148,11 +172,11 @@ namespace CalorieTracker.Server.Controllers
                         Email = user.Email,
                         Name = user.Name,
                         Age = user.Age,
-                        Weight = user.Weight,
+                        Weight = currentWeight,
                         Height = user.Height,
                         Gender = user.Gender,
                         ActivityLevel = user.ActivityLevel,
-                        DailyCalorieGoal = user.DailyCalorieGoal,
+                        DailyCalorieGoal = dailyCalorieGoal,
                         CreatedAt = user.CreatedAt
                     }
                 };

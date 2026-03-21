@@ -39,13 +39,26 @@ namespace CalorieTracker.Server.Controllers
 
                 var user = await _context.Users.FindAsync(userId);
 
+                // Current weight from WeightRecord; DailyCalorieGoal computed (3NF)
+                var latestWeightRecord = await _context.WeightRecords
+                    .Where(wr => wr.UserId == userId)
+                    .OrderByDescending(wr => wr.RecordDate)
+                    .FirstOrDefaultAsync();
+
+                decimal? currentWeight = latestWeightRecord?.Weight;
+                int? dailyCalorieGoal = null;
+                if (user != null && user.Age.HasValue && currentWeight.HasValue && user.Height.HasValue && !string.IsNullOrEmpty(user.Gender))
+                {
+                    dailyCalorieGoal = CalculateDailyCalorieGoal(user.Age.Value, currentWeight.Value, user.Height.Value, user.Gender, user.ActivityLevel);
+                }
+
                 var summary = new DailyNutritionSummaryDto
                 {
                     TotalCalories = mealDtos.Sum(m => m.TotalCalories),
                     TotalProtein  = mealDtos.Sum(m => m.TotalProtein),
                     TotalFats     = mealDtos.Sum(m => m.TotalFats),
                     TotalCarbs    = mealDtos.Sum(m => m.TotalCarbs),
-                    DailyCalorieGoal = user?.DailyCalorieGoal
+                    DailyCalorieGoal = dailyCalorieGoal
                 };
 
                 return Ok(new DailyMealsDto { Date = parsedDate, Meals = mealDtos, Summary = summary });
@@ -230,6 +243,25 @@ namespace CalorieTracker.Server.Controllers
         }
 
         // ── Helpers ─────────────────────────────────────────────────────
+
+        private static int CalculateDailyCalorieGoal(int age, decimal weight, decimal height, string gender, int activityLevel)
+        {
+            decimal bmr = gender.ToLower() == "male"
+                ? (10 * weight) + (6.25m * height) - (5 * age) + 5
+                : (10 * weight) + (6.25m * height) - (5 * age) - 161;
+
+            decimal activityMultiplier = activityLevel switch
+            {
+                1 => 1.2m,
+                2 => 1.375m,
+                3 => 1.55m,
+                4 => 1.725m,
+                5 => 1.9m,
+                _ => 1.2m
+            };
+
+            return (int)Math.Round(bmr * activityMultiplier);
+        }
 
         private static MealItem BuildMealItem(int mealId, MealItemCreateDto dto) => new()
         {

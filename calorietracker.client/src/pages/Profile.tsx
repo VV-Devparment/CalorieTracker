@@ -47,7 +47,6 @@ const Profile = () => {
         height: user?.height || '',
         gender: user?.gender || '',
         activityLevel: user?.activityLevel || 2,
-        dailyCalorieGoal: user?.dailyCalorieGoal || ''
     });
 
     useEffect(() => {
@@ -86,27 +85,28 @@ const Profile = () => {
     const handleSave = async () => {
         try {
             setLoading(true);
-            const updateData = {
-                ...formData,
-                age: formData.age ? Number(formData.age) : undefined,
-                weight: formData.weight ? Number(formData.weight) : undefined,
-                height: formData.height ? Number(formData.height) : undefined,
-                activityLevel: Number(formData.activityLevel),
-                dailyCalorieGoal: formData.dailyCalorieGoal ? Number(formData.dailyCalorieGoal) : undefined
-            };
 
-            // Перевіряємо чи змінилася вага
+            const newWeightVal = formData.weight ? Number(formData.weight) : undefined;
             const oldWeight = user?.weight;
-            const newWeight = updateData.weight;
+
+            // Weight is stored only in WeightRecords (3NF) — update it separately if changed
+            if (newWeightVal && newWeightVal !== oldWeight) {
+                await usersApi.addWeightRecord(newWeightVal);
+                notificationService.onWeightUpdated(newWeightVal);
+            }
+
+            // Update profile fields (weight and dailyCalorieGoal are excluded — handled by 3NF design)
+            const updateData = {
+                name: formData.name,
+                age: formData.age ? Number(formData.age) : undefined,
+                height: formData.height ? Number(formData.height) : undefined,
+                gender: formData.gender || undefined,
+                activityLevel: Number(formData.activityLevel),
+            };
 
             const response = await usersApi.updateProfile(updateData);
             setUser(response.data);
             setCurrentUser(response.data);
-
-            // Якщо вага змінилася, додаємо повідомлення
-            if (oldWeight !== newWeight && newWeight) {
-                notificationService.onWeightUpdated(newWeight);
-            }
 
             setEditing(false);
             alert('Профіль успішно оновлено!');
@@ -375,19 +375,10 @@ const Profile = () => {
 
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 mb-2">Денна норма калорій</label>
-                                            {editing ? (
-                                                <input
-                                                    type="number"
-                                                    name="dailyCalorieGoal"
-                                                    value={formData.dailyCalorieGoal}
-                                                    onChange={handleInputChange}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                                />
-                                            ) : (
-                                                <p className="text-gray-900 font-medium text-blue-600">
-                                                    {user?.dailyCalorieGoal ? `${user.dailyCalorieGoal} ккал` : 'Не розраховано'}
-                                                </p>
-                                            )}
+                                            <p className="text-gray-900 font-medium text-blue-600">
+                                                {user?.dailyCalorieGoal ? `${user.dailyCalorieGoal} ккал` : 'Не розраховано (вкажіть вік, вагу, зріст та стать)'}
+                                            </p>
+                                            {editing && <p className="text-xs text-gray-400 mt-1">Розраховується автоматично з ваших параметрів</p>}
                                         </div>
                                     </div>
                                 </div>

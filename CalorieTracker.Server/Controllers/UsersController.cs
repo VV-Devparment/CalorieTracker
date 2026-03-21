@@ -32,17 +32,32 @@ namespace CalorieTracker.Server.Controllers
                     return NotFound(new { message = "Користувача не знайдено" });
                 }
 
+                // Current weight is derived from the latest WeightRecord (3NF)
+                var latestWeightRecord = await _context.WeightRecords
+                    .Where(wr => wr.UserId == userId)
+                    .OrderByDescending(wr => wr.RecordDate)
+                    .FirstOrDefaultAsync();
+
+                decimal? currentWeight = latestWeightRecord?.Weight;
+
+                // DailyCalorieGoal is computed, not stored (3NF)
+                int? dailyCalorieGoal = null;
+                if (user.Age.HasValue && currentWeight.HasValue && user.Height.HasValue && !string.IsNullOrEmpty(user.Gender))
+                {
+                    dailyCalorieGoal = CalculateDailyCalorieGoal(user.Age.Value, currentWeight.Value, user.Height.Value, user.Gender, user.ActivityLevel);
+                }
+
                 var profileDto = new UserProfileDto
                 {
                     Id = user.Id,
                     Email = user.Email,
                     Name = user.Name,
                     Age = user.Age,
-                    Weight = user.Weight,
+                    Weight = currentWeight,
                     Height = user.Height,
                     Gender = user.Gender,
                     ActivityLevel = user.ActivityLevel,
-                    DailyCalorieGoal = user.DailyCalorieGoal,
+                    DailyCalorieGoal = dailyCalorieGoal,
                     CreatedAt = user.CreatedAt
                 };
 
@@ -67,15 +82,11 @@ namespace CalorieTracker.Server.Controllers
                     return NotFound(new { message = "Користувача не знайдено" });
                 }
 
-                // Оновлюємо дані користувача
                 if (!string.IsNullOrEmpty(dto.Name))
                     user.Name = dto.Name;
 
                 if (dto.Age.HasValue)
                     user.Age = dto.Age.Value;
-
-                if (dto.Weight.HasValue)
-                    user.Weight = dto.Weight.Value;
 
                 if (dto.Height.HasValue)
                     user.Height = dto.Height.Value;
@@ -86,25 +97,22 @@ namespace CalorieTracker.Server.Controllers
                 if (dto.ActivityLevel.HasValue)
                     user.ActivityLevel = dto.ActivityLevel.Value;
 
-                if (dto.DailyCalorieGoal.HasValue)
-                    user.DailyCalorieGoal = dto.DailyCalorieGoal.Value;
-
-                // ⭐ ЗАКОМЕНТОВАНО: Тригер автоматично оновить UpdatedAt
-                // user.UpdatedAt = DateTime.UtcNow;
-
-                // Пересчитуємо денну норму калорій якщо змінилися параметри
-                if (user.Age.HasValue && user.Weight.HasValue && user.Height.HasValue && !string.IsNullOrEmpty(user.Gender))
-                {
-                    user.DailyCalorieGoal = CalculateDailyCalorieGoal(
-                        user.Age.Value,
-                        user.Weight.Value,
-                        user.Height.Value,
-                        user.Gender,
-                        user.ActivityLevel
-                    );
-                }
-
                 await _context.SaveChangesAsync();
+
+                // Current weight from WeightRecord (3NF — not stored in Users)
+                var latestWeightRecord = await _context.WeightRecords
+                    .Where(wr => wr.UserId == userId)
+                    .OrderByDescending(wr => wr.RecordDate)
+                    .FirstOrDefaultAsync();
+
+                decimal? currentWeight = latestWeightRecord?.Weight;
+
+                // DailyCalorieGoal computed from anthropometrics (3NF — not stored in Users)
+                int? dailyCalorieGoal = null;
+                if (user.Age.HasValue && currentWeight.HasValue && user.Height.HasValue && !string.IsNullOrEmpty(user.Gender))
+                {
+                    dailyCalorieGoal = CalculateDailyCalorieGoal(user.Age.Value, currentWeight.Value, user.Height.Value, user.Gender, user.ActivityLevel);
+                }
 
                 var profileDto = new UserProfileDto
                 {
@@ -112,11 +120,11 @@ namespace CalorieTracker.Server.Controllers
                     Email = user.Email,
                     Name = user.Name,
                     Age = user.Age,
-                    Weight = user.Weight,
+                    Weight = currentWeight,
                     Height = user.Height,
                     Gender = user.Gender,
                     ActivityLevel = user.ActivityLevel,
-                    DailyCalorieGoal = user.DailyCalorieGoal,
+                    DailyCalorieGoal = dailyCalorieGoal,
                     CreatedAt = user.CreatedAt
                 };
 
@@ -137,16 +145,7 @@ namespace CalorieTracker.Server.Controllers
 
                 var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
-                // Спочатку оновлюємо вагу в профілі користувача
-                var user = await _context.Users.FindAsync(userId);
-                if (user != null)
-                {
-                    user.Weight = weight;
-                    // ⭐ ЗАКОМЕНТОВАНО: Тригер автоматично оновить UpdatedAt
-                    // user.UpdatedAt = DateTime.UtcNow;
-                }
-
-                // Потім обробляємо запис ваги
+                // Weight is stored only in WeightRecords (3NF — removed from Users)
                 var existingRecord = await _context.WeightRecords
                     .FirstOrDefaultAsync(wr => wr.UserId == userId && wr.RecordDate == today);
 
