@@ -47,9 +47,10 @@ namespace CalorieTracker.Server.Controllers
 
                 decimal? currentWeight = latestWeightRecord?.Weight;
                 int? dailyCalorieGoal = null;
-                if (user != null && user.Age.HasValue && currentWeight.HasValue && user.Height.HasValue && !string.IsNullOrEmpty(user.Gender))
+                var age = ComputeAge(user?.DateOfBirth);
+                if (age.HasValue && currentWeight.HasValue && user!.Height.HasValue && !string.IsNullOrEmpty(user.Gender))
                 {
-                    dailyCalorieGoal = CalculateDailyCalorieGoal(user.Age.Value, currentWeight.Value, user.Height.Value, user.Gender, user.ActivityLevel);
+                    dailyCalorieGoal = CalculateDailyCalorieGoal(age.Value, currentWeight.Value, user.Height.Value, user.Gender, user.ActivityLevel);
                 }
 
                 var summary = new DailyNutritionSummaryDto
@@ -243,6 +244,15 @@ namespace CalorieTracker.Server.Controllers
         }
 
         // ── Helpers ─────────────────────────────────────────────────────
+
+        private static int? ComputeAge(DateOnly? dateOfBirth)
+        {
+            if (!dateOfBirth.HasValue) return null;
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            int age = today.Year - dateOfBirth.Value.Year;
+            if (dateOfBirth.Value > today.AddYears(-age)) age--;
+            return age;
+        }
 
         private static int CalculateDailyCalorieGoal(int age, decimal weight, decimal height, string gender, int activityLevel)
         {

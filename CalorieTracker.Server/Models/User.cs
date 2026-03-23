@@ -19,7 +19,7 @@ namespace CalorieTracker.Server.Models
         [StringLength(100)]
         public string Name { get; set; } = string.Empty;
 
-        public int? Age { get; set; }
+        public DateOnly? DateOfBirth { get; set; }
 
         // Weight removed — current weight is derived from the latest WeightRecord (3NF)
 

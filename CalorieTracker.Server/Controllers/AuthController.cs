@@ -43,7 +43,7 @@ namespace CalorieTracker.Server.Controllers
                     Email = dto.Email,
                     PasswordHash = _authService.HashPassword(dto.Password),
                     Name = dto.Name,
-                    Age = dto.Age,
+                    DateOfBirth = dto.DateOfBirth,
                     Height = dto.Height,
                     Gender = dto.Gender,
                     ActivityLevel = dto.ActivityLevel,
@@ -86,9 +86,10 @@ namespace CalorieTracker.Server.Controllers
 
                 // DailyCalorieGoal is computed, not stored (3NF)
                 int? dailyCalorieGoal = null;
-                if (dto.Age.HasValue && dto.Weight.HasValue && dto.Height.HasValue && !string.IsNullOrEmpty(dto.Gender))
+                var regAge = ComputeAge(dto.DateOfBirth);
+                if (regAge.HasValue && dto.Weight.HasValue && dto.Height.HasValue && !string.IsNullOrEmpty(dto.Gender))
                 {
-                    dailyCalorieGoal = CalculateDailyCalorieGoal(dto.Age.Value, dto.Weight.Value, dto.Height.Value, dto.Gender, dto.ActivityLevel);
+                    dailyCalorieGoal = CalculateDailyCalorieGoal(regAge.Value, dto.Weight.Value, dto.Height.Value, dto.Gender, dto.ActivityLevel);
                     Console.WriteLine($"[REGISTER] Розрахована денна норма: {dailyCalorieGoal} ккал");
                 }
 
@@ -105,7 +106,7 @@ namespace CalorieTracker.Server.Controllers
                         Id = user.Id,
                         Email = user.Email,
                         Name = user.Name,
-                        Age = user.Age,
+                        DateOfBirth = user.DateOfBirth,
                         Weight = dto.Weight,
                         Height = user.Height,
                         Gender = user.Gender,
@@ -158,9 +159,10 @@ namespace CalorieTracker.Server.Controllers
 
                 // DailyCalorieGoal computed, not stored (3NF)
                 int? dailyCalorieGoal = null;
-                if (user.Age.HasValue && currentWeight.HasValue && user.Height.HasValue && !string.IsNullOrEmpty(user.Gender))
+                var loginAge = ComputeAge(user.DateOfBirth);
+                if (loginAge.HasValue && currentWeight.HasValue && user.Height.HasValue && !string.IsNullOrEmpty(user.Gender))
                 {
-                    dailyCalorieGoal = CalculateDailyCalorieGoal(user.Age.Value, currentWeight.Value, user.Height.Value, user.Gender, user.ActivityLevel);
+                    dailyCalorieGoal = CalculateDailyCalorieGoal(loginAge.Value, currentWeight.Value, user.Height.Value, user.Gender, user.ActivityLevel);
                 }
 
                 var response = new AuthResponseDto
@@ -171,7 +173,7 @@ namespace CalorieTracker.Server.Controllers
                         Id = user.Id,
                         Email = user.Email,
                         Name = user.Name,
-                        Age = user.Age,
+                        DateOfBirth = user.DateOfBirth,
                         Weight = currentWeight,
                         Height = user.Height,
                         Gender = user.Gender,
@@ -187,6 +189,15 @@ namespace CalorieTracker.Server.Controllers
             {
                 return StatusCode(500, new { message = "Помилка при авторизації", error = ex.Message });
             }
+        }
+
+        private static int? ComputeAge(DateOnly? dateOfBirth)
+        {
+            if (!dateOfBirth.HasValue) return null;
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            int age = today.Year - dateOfBirth.Value.Year;
+            if (dateOfBirth.Value > today.AddYears(-age)) age--;
+            return age;
         }
 
         private int CalculateDailyCalorieGoal(int age, decimal weight, decimal height, string gender, int activityLevel)

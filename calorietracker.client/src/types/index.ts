@@ -3,7 +3,7 @@ export interface User {
     id: number;
     email: string;
     name: string;
-    age?: number;
+    dateOfBirth?: string; // ISO date string: "YYYY-MM-DD"
     weight?: number;
     height?: number;
     gender?: string;
@@ -16,7 +16,7 @@ export interface UserRegistration {
     email: string;
     password: string;
     name: string;
-    age?: number;
+    dateOfBirth?: string; // ISO date string: "YYYY-MM-DD"
     weight?: number;
     height?: number;
     gender?: string;
