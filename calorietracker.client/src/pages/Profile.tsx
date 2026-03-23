@@ -89,17 +89,20 @@ const Profile = () => {
             const newWeightVal = formData.weight ? Number(formData.weight) : undefined;
             const oldWeight = user?.weight;
 
-            // Weight is stored only in WeightRecords (3NF) — update it separately if changed
+            // Weight and Height are stored only in WeightRecords (3NF)
+            const newHeightVal = formData.height ? Number(formData.height) : undefined;
             if (newWeightVal && newWeightVal !== oldWeight) {
-                await usersApi.addWeightRecord(newWeightVal);
+                await usersApi.addWeightRecord(newWeightVal, newHeightVal);
                 notificationService.onWeightUpdated(newWeightVal);
+            } else if (newHeightVal && newHeightVal !== user?.height) {
+                // Height changed but weight didn't — still need to record height
+                await usersApi.addWeightRecord(newWeightVal || user?.weight || 0, newHeightVal);
             }
 
-            // Update profile fields (weight and dailyCalorieGoal are excluded — handled by 3NF design)
+            // Update profile fields (weight/height/dailyCalorieGoal excluded — handled by 3NF design)
             const updateData = {
                 name: formData.name,
                 dateOfBirth: formData.dateOfBirth || undefined,
-                height: formData.height ? Number(formData.height) : undefined,
                 gender: formData.gender || undefined,
                 activityLevel: Number(formData.activityLevel),
             };

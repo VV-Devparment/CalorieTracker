@@ -46,11 +46,12 @@ namespace CalorieTracker.Server.Controllers
                     .FirstOrDefaultAsync();
 
                 decimal? currentWeight = latestWeightRecord?.Weight;
+                decimal? currentHeight = latestWeightRecord?.Height;
                 int? dailyCalorieGoal = null;
                 var age = ComputeAge(user?.DateOfBirth);
-                if (age.HasValue && currentWeight.HasValue && user!.Height.HasValue && !string.IsNullOrEmpty(user.Gender))
+                if (age.HasValue && currentWeight.HasValue && currentHeight.HasValue && !string.IsNullOrEmpty(user!.Gender))
                 {
-                    dailyCalorieGoal = CalculateDailyCalorieGoal(age.Value, currentWeight.Value, user.Height.Value, user.Gender, user.ActivityLevel);
+                    dailyCalorieGoal = CalculateDailyCalorieGoal(age.Value, currentWeight.Value, currentHeight.Value, user.Gender, user.ActivityLevel);
                 }
 
                 var summary = new DailyNutritionSummaryDto

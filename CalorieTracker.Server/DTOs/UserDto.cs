@@ -53,7 +53,7 @@ namespace CalorieTracker.Server.DTOs
         public string? Name { get; set; }
         public DateOnly? DateOfBirth { get; set; }
         // Weight is NOT updated here — use POST /users/weight to record a new weight (3NF)
-        public decimal? Height { get; set; }
+        // Height is NOT updated here — use POST /users/weight to record height with weight (3NF)
         public string? Gender { get; set; }
         public int? ActivityLevel { get; set; }
         // DailyCalorieGoal is NOT stored — it is computed from anthropometrics (3NF)
@@ -71,5 +71,8 @@ namespace CalorieTracker.Server.DTOs
         [Required]
         [Range(1, 999.99)]
         public decimal Weight { get; set; }
+
+        [Range(50, 300)]
+        public decimal? Height { get; set; } // необов'язково — оновлюється разом з вагою
     }
 }
