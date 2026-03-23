@@ -44,7 +44,7 @@ namespace CalorieTracker.Server.Controllers
                     PasswordHash = _authService.HashPassword(dto.Password),
                     Name = dto.Name,
                     DateOfBirth = dto.DateOfBirth,
-                    Height = dto.Height,
+                    // Height is NOT stored in Users — it goes to the initial WeightRecord (3NF)
                     Gender = dto.Gender,
                     ActivityLevel = dto.ActivityLevel,
                     CreatedAt = DateTime.UtcNow,
@@ -71,17 +71,19 @@ namespace CalorieTracker.Server.Controllers
                 }
 
                 // If weight was provided at registration, create an initial WeightRecord (3NF)
-                if (dto.Weight.HasValue)
+                // Height is also stored here, not in Users (3NF)
+                if (dto.Weight.HasValue || dto.Height.HasValue)
                 {
                     _context.WeightRecords.Add(new WeightRecord
                     {
                         UserId = user.Id,
-                        Weight = dto.Weight.Value,
+                        Weight = dto.Weight ?? 0,
+                        Height = dto.Height,
                         RecordDate = DateOnly.FromDateTime(DateTime.UtcNow),
                         CreatedAt = DateTime.UtcNow
                     });
                     await _context.SaveChangesAsync();
-                    Console.WriteLine($"[REGISTER] Створено початковий запис ваги: {dto.Weight.Value} кг");
+                    Console.WriteLine($"[REGISTER] Створено початковий запис: вага={dto.Weight} кг, зріст={dto.Height} см");
                 }
 
                 // DailyCalorieGoal is computed, not stored (3NF)
@@ -108,7 +110,7 @@ namespace CalorieTracker.Server.Controllers
                         Name = user.Name,
                         DateOfBirth = user.DateOfBirth,
                         Weight = dto.Weight,
-                        Height = user.Height,
+                        Height = dto.Height,
                         Gender = user.Gender,
                         ActivityLevel = user.ActivityLevel,
                         DailyCalorieGoal = dailyCalorieGoal,
@@ -156,13 +158,14 @@ namespace CalorieTracker.Server.Controllers
                     .FirstOrDefaultAsync();
 
                 decimal? currentWeight = latestWeightRecord?.Weight;
+                decimal? currentHeight = latestWeightRecord?.Height;
 
                 // DailyCalorieGoal computed, not stored (3NF)
                 int? dailyCalorieGoal = null;
                 var loginAge = ComputeAge(user.DateOfBirth);
-                if (loginAge.HasValue && currentWeight.HasValue && user.Height.HasValue && !string.IsNullOrEmpty(user.Gender))
+                if (loginAge.HasValue && currentWeight.HasValue && currentHeight.HasValue && !string.IsNullOrEmpty(user.Gender))
                 {
-                    dailyCalorieGoal = CalculateDailyCalorieGoal(loginAge.Value, currentWeight.Value, user.Height.Value, user.Gender, user.ActivityLevel);
+                    dailyCalorieGoal = CalculateDailyCalorieGoal(loginAge.Value, currentWeight.Value, currentHeight.Value, user.Gender, user.ActivityLevel);
                 }
 
                 var response = new AuthResponseDto
@@ -175,7 +178,7 @@ namespace CalorieTracker.Server.Controllers
                         Name = user.Name,
                         DateOfBirth = user.DateOfBirth,
                         Weight = currentWeight,
-                        Height = user.Height,
+                        Height = currentHeight,
                         Gender = user.Gender,
                         ActivityLevel = user.ActivityLevel,
                         DailyCalorieGoal = dailyCalorieGoal,

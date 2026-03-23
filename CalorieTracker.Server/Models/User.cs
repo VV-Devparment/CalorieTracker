@@ -22,8 +22,7 @@ namespace CalorieTracker.Server.Models
         public DateOnly? DateOfBirth { get; set; }
 
         // Weight removed — current weight is derived from the latest WeightRecord (3NF)
-
-        public decimal? Height { get; set; } // в см
+        // Height removed — stored in WeightRecord as it can change over time (3NF)
 
         [StringLength(10)]
         public string? Gender { get; set; } // Male, Female, Other

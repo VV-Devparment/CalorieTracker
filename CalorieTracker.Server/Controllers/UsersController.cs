@@ -39,13 +39,14 @@ namespace CalorieTracker.Server.Controllers
                     .FirstOrDefaultAsync();
 
                 decimal? currentWeight = latestWeightRecord?.Weight;
+                decimal? currentHeight = latestWeightRecord?.Height;
 
                 // DailyCalorieGoal is computed, not stored (3NF)
                 int? dailyCalorieGoal = null;
                 var age = ComputeAge(user.DateOfBirth);
-                if (age.HasValue && currentWeight.HasValue && user.Height.HasValue && !string.IsNullOrEmpty(user.Gender))
+                if (age.HasValue && currentWeight.HasValue && currentHeight.HasValue && !string.IsNullOrEmpty(user.Gender))
                 {
-                    dailyCalorieGoal = CalculateDailyCalorieGoal(age.Value, currentWeight.Value, user.Height.Value, user.Gender, user.ActivityLevel);
+                    dailyCalorieGoal = CalculateDailyCalorieGoal(age.Value, currentWeight.Value, currentHeight.Value, user.Gender, user.ActivityLevel);
                 }
 
                 var profileDto = new UserProfileDto
@@ -55,7 +56,7 @@ namespace CalorieTracker.Server.Controllers
                     Name = user.Name,
                     DateOfBirth = user.DateOfBirth,
                     Weight = currentWeight,
-                    Height = user.Height,
+                    Height = currentHeight,
                     Gender = user.Gender,
                     ActivityLevel = user.ActivityLevel,
                     DailyCalorieGoal = dailyCalorieGoal,
@@ -89,8 +90,7 @@ namespace CalorieTracker.Server.Controllers
                 if (dto.DateOfBirth.HasValue)
                     user.DateOfBirth = dto.DateOfBirth.Value;
 
-                if (dto.Height.HasValue)
-                    user.Height = dto.Height.Value;
+                // Height is NOT updated here — it is recorded via POST /users/weight (3NF)
 
                 if (!string.IsNullOrEmpty(dto.Gender))
                     user.Gender = dto.Gender;
@@ -100,20 +100,21 @@ namespace CalorieTracker.Server.Controllers
 
                 await _context.SaveChangesAsync();
 
-                // Current weight from WeightRecord (3NF — not stored in Users)
+                // Current weight and height from WeightRecord (3NF — not stored in Users)
                 var latestWeightRecord = await _context.WeightRecords
                     .Where(wr => wr.UserId == userId)
                     .OrderByDescending(wr => wr.RecordDate)
                     .FirstOrDefaultAsync();
 
                 decimal? currentWeight = latestWeightRecord?.Weight;
+                decimal? currentHeight = latestWeightRecord?.Height;
 
                 // DailyCalorieGoal computed from anthropometrics (3NF — not stored in Users)
                 int? dailyCalorieGoal = null;
                 var age = ComputeAge(user.DateOfBirth);
-                if (age.HasValue && currentWeight.HasValue && user.Height.HasValue && !string.IsNullOrEmpty(user.Gender))
+                if (age.HasValue && currentWeight.HasValue && currentHeight.HasValue && !string.IsNullOrEmpty(user.Gender))
                 {
-                    dailyCalorieGoal = CalculateDailyCalorieGoal(age.Value, currentWeight.Value, user.Height.Value, user.Gender, user.ActivityLevel);
+                    dailyCalorieGoal = CalculateDailyCalorieGoal(age.Value, currentWeight.Value, currentHeight.Value, user.Gender, user.ActivityLevel);
                 }
 
                 var profileDto = new UserProfileDto
@@ -123,7 +124,7 @@ namespace CalorieTracker.Server.Controllers
                     Name = user.Name,
                     DateOfBirth = user.DateOfBirth,
                     Weight = currentWeight,
-                    Height = user.Height,
+                    Height = currentHeight,
                     Gender = user.Gender,
                     ActivityLevel = user.ActivityLevel,
                     DailyCalorieGoal = dailyCalorieGoal,
@@ -139,7 +140,7 @@ namespace CalorieTracker.Server.Controllers
         }
 
         [HttpPost("weight")]
-        public async Task<ActionResult> AddWeightRecord([FromBody] decimal weight)
+        public async Task<ActionResult> AddWeightRecord([FromBody] WeightRequestDto dto)
         {
             try
             {
@@ -147,22 +148,23 @@ namespace CalorieTracker.Server.Controllers
 
                 var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
-                // Weight is stored only in WeightRecords (3NF — removed from Users)
+                // Weight and Height are stored only in WeightRecords (3NF — removed from Users)
                 var existingRecord = await _context.WeightRecords
                     .FirstOrDefaultAsync(wr => wr.UserId == userId && wr.RecordDate == today);
 
                 if (existingRecord != null)
                 {
-                    // Оновлюємо існуючий запис
-                    existingRecord.Weight = weight;
+                    existingRecord.Weight = dto.Weight;
+                    if (dto.Height.HasValue)
+                        existingRecord.Height = dto.Height.Value;
                 }
                 else
                 {
-                    // Створюємо новий запис
                     var weightRecord = new WeightRecord
                     {
                         UserId = userId,
-                        Weight = weight,
+                        Weight = dto.Weight,
+                        Height = dto.Height,
                         RecordDate = today,
                         CreatedAt = DateTime.UtcNow
                     };
@@ -171,7 +173,7 @@ namespace CalorieTracker.Server.Controllers
 
                 await _context.SaveChangesAsync();
 
-                return Ok(new { message = "Вага успішно записана", weight });
+                return Ok(new { message = "Вага успішно записана", weight = dto.Weight, height = dto.Height });
             }
             catch (Exception ex)
             {
@@ -194,7 +196,8 @@ namespace CalorieTracker.Server.Controllers
                     .Select(wr => new
                     {
                         Date = wr.RecordDate,
-                        Weight = wr.Weight
+                        Weight = wr.Weight,
+                        Height = wr.Height
                     })
                     .ToListAsync();
 

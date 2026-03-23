@@ -13,6 +13,9 @@ namespace CalorieTracker.Server.Models
         [Range(1, 999.99)]
         public decimal Weight { get; set; } // в кг
 
+        [Range(50, 300)]
+        public decimal? Height { get; set; } // в см (може змінюватись з часом)
+
         [Required]
         public DateOnly RecordDate { get; set; }
 

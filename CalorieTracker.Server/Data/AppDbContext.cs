@@ -30,7 +30,7 @@ namespace CalorieTracker.Server.Data
                 entity.Property(e => e.PasswordHash).HasMaxLength(255).IsRequired();
                 entity.Property(e => e.Name).HasMaxLength(100).IsRequired();
                 entity.Property(e => e.Gender).HasMaxLength(10);
-                entity.Property(e => e.Height).HasColumnType("decimal(5,2)");
+                // Height removed from Users — moved to WeightRecords (3NF)
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("NOW()");
 
@@ -129,6 +129,7 @@ namespace CalorieTracker.Server.Data
             {
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.Weight).HasColumnType("decimal(5,2)").IsRequired();
+                entity.Property(e => e.Height).HasColumnType("decimal(5,2)");
                 entity.Property(e => e.RecordDate).IsRequired();
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
 
