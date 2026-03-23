@@ -72,12 +72,12 @@ namespace CalorieTracker.Server.Controllers
 
                 // If weight was provided at registration, create an initial WeightRecord (3NF)
                 // Height is also stored here, not in Users (3NF)
-                if (dto.Weight.HasValue || dto.Height.HasValue)
+                if (dto.Weight.HasValue)
                 {
                     _context.WeightRecords.Add(new WeightRecord
                     {
                         UserId = user.Id,
-                        Weight = dto.Weight ?? 0,
+                        Weight = dto.Weight.Value,
                         Height = dto.Height,
                         RecordDate = DateOnly.FromDateTime(DateTime.UtcNow),
                         CreatedAt = DateTime.UtcNow

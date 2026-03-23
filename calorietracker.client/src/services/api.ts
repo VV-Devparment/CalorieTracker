@@ -167,10 +167,8 @@ export const usersApi = {
     updateProfile: (data: Partial<User>): Promise<AxiosResponse<User>> =>
         api.put('/users/profile', data),
 
-    addWeightRecord: (weight: number): Promise<AxiosResponse<any>> =>
-        api.post('/users/weight', weight, {
-            headers: { 'Content-Type': 'application/json' }
-        }),
+    addWeightRecord: (weight: number, height?: number): Promise<AxiosResponse<any>> =>
+        api.post('/users/weight', { weight, height }),
 
     getWeightHistory: (days = 30): Promise<AxiosResponse<{ date: string; weight: number }[]>> =>
         api.get('/users/weight-history', { params: { days } }),
