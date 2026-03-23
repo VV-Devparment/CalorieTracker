@@ -10,7 +10,7 @@ const Register = () => {
         email: '',
         password: '',
         name: '',
-        age: undefined,
+        dateOfBirth: undefined,
         weight: undefined,
         height: undefined,
         gender: '',
@@ -24,9 +24,9 @@ const Register = () => {
         const { name, value } = e.target;
         setFormData(prev => ({
             ...prev,
-            [name]: name === 'age' || name === 'weight' || name === 'height' || name === 'activityLevel'
+            [name]: name === 'weight' || name === 'height' || name === 'activityLevel'
                 ? value ? Number(value) : undefined
-                : value,
+                : value || undefined,
         }));
         // Clear error when user starts typing
         if (error) setError('');
@@ -230,17 +230,16 @@ const Register = () => {
                                 />
                             </div>
 
-                            {/* Age and Gender */}
+                            {/* DateOfBirth and Gender */}
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                                 <div>
                                     <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
-                                        Вік
+                                        Дата народження
                                     </label>
                                     <input
-                                        name="age"
-                                        type="number"
-                                        min="1"
-                                        max="120"
+                                        name="dateOfBirth"
+                                        type="date"
+                                        max={new Date().toISOString().split('T')[0]}
                                         style={{
                                             display: 'block',
                                             width: '100%',
@@ -250,8 +249,7 @@ const Register = () => {
                                             fontSize: '14px',
                                             boxSizing: 'border-box'
                                         }}
-                                        placeholder="25"
-                                        value={formData.age || ''}
+                                        value={formData.dateOfBirth || ''}
                                         onChange={handleInputChange}
                                     />
                                 </div>

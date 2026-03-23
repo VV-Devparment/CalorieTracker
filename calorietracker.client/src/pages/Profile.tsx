@@ -8,7 +8,7 @@ interface User {
     id: number;
     email: string;
     name: string;
-    age?: number;
+    dateOfBirth?: string; // ISO date string: "YYYY-MM-DD"
     weight?: number;
     height?: number;
     gender?: string;
@@ -42,7 +42,7 @@ const Profile = () => {
 
     const [formData, setFormData] = useState({
         name: user?.name || '',
-        age: user?.age || '',
+        dateOfBirth: user?.dateOfBirth || '',
         weight: user?.weight || '',
         height: user?.height || '',
         gender: user?.gender || '',
@@ -76,7 +76,7 @@ const Profile = () => {
         const { name, value } = e.target;
         setFormData(prev => ({
             ...prev,
-            [name]: name === 'age' || name === 'weight' || name === 'height' || name === 'activityLevel' || name === 'dailyCalorieGoal'
+            [name]: name === 'weight' || name === 'height' || name === 'activityLevel'
                 ? value ? Number(value) : ''
                 : value
         }));
@@ -98,7 +98,7 @@ const Profile = () => {
             // Update profile fields (weight and dailyCalorieGoal are excluded — handled by 3NF design)
             const updateData = {
                 name: formData.name,
-                age: formData.age ? Number(formData.age) : undefined,
+                dateOfBirth: formData.dateOfBirth || undefined,
                 height: formData.height ? Number(formData.height) : undefined,
                 gender: formData.gender || undefined,
                 activityLevel: Number(formData.activityLevel),
@@ -287,17 +287,22 @@ const Profile = () => {
                                         </div>
 
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">Вік</label>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">Дата народження</label>
                                             {editing ? (
                                                 <input
-                                                    type="number"
-                                                    name="age"
-                                                    value={formData.age}
+                                                    type="date"
+                                                    name="dateOfBirth"
+                                                    value={formData.dateOfBirth}
+                                                    max={new Date().toISOString().split('T')[0]}
                                                     onChange={handleInputChange}
                                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                                 />
                                             ) : (
-                                                <p className="text-gray-900 font-medium">{user?.age || 'Не вказано'}</p>
+                                                <p className="text-gray-900 font-medium">
+                                                    {user?.dateOfBirth
+                                                        ? new Date(user.dateOfBirth).toLocaleDateString('uk-UA')
+                                                        : 'Не вказано'}
+                                                </p>
                                             )}
                                         </div>
 
