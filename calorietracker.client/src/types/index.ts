@@ -152,6 +152,17 @@ export interface FoodSearchParams {
     customOnly?: boolean;
 }
 
+// Achievement types
+export interface AchievementDto {
+    code: string;
+    title: string;
+    description: string;
+    emoji: string;
+    category: string;
+    isUnlocked: boolean;
+    unlockedAt?: string;
+}
+
 export interface ExternalFood {
     externalId: string;
     source: 'USDA' | 'OpenFoodFacts';

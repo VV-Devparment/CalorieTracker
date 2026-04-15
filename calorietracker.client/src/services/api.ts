@@ -12,7 +12,8 @@ import type {
     DailyMeals,
     Meal,
     AddFoodToMeal,
-    MealType
+    MealType,
+    AchievementDto
 } from '../types';
 
 // Base API configuration
@@ -175,6 +176,15 @@ export const usersApi = {
 
     getStatistics: (days = 7): Promise<AxiosResponse<any>> =>
         api.get('/users/statistics', { params: { days } }),
+};
+
+// Achievements API
+export const achievementsApi = {
+    getAll: (): Promise<AxiosResponse<AchievementDto[]>> =>
+        api.get('/achievements'),
+
+    check: (): Promise<AxiosResponse<AchievementDto[]>> =>
+        api.post('/achievements/check'),
 };
 
 export default api;

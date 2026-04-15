@@ -23,6 +23,12 @@ const MobileBottomNavbar = () => {
             label: 'Статистика',
             icon: 'chart',
             activeIcon: 'chart'
+        },
+        {
+            path: '/achievements',
+            label: 'Досягнення',
+            icon: 'trophy',
+            activeIcon: 'trophy'
         }
     ];
 
@@ -30,7 +36,7 @@ const MobileBottomNavbar = () => {
         <>
             <div className="h-16"></div>
             <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-50">
-                <div className="grid grid-cols-3 h-16">
+                <div className="grid grid-cols-4 h-16">
                     {navItems.map((item) => {
                         const isActive = location.pathname === item.path;
                         return (
