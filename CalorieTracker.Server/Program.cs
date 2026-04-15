@@ -84,6 +84,7 @@ builder.Services.AddHttpClient("OpenFoodFacts", c =>
     c.Timeout = TimeSpan.FromSeconds(30);
 });
 builder.Services.AddScoped<ExternalFoodService>();
+builder.Services.AddScoped<AchievementService>();
 
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();

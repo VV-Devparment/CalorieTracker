@@ -16,6 +16,7 @@ namespace CalorieTracker.Server.Data
         public DbSet<MealItem> MealItems { get; set; }
         public DbSet<UserGoal> UserGoals { get; set; }
         public DbSet<WeightRecord> WeightRecords { get; set; }
+        public DbSet<Achievement> Achievements { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -141,6 +142,22 @@ namespace CalorieTracker.Server.Data
 
                 // Index for performance
                 entity.HasIndex(e => new { e.UserId, e.RecordDate });
+            });
+
+            // Achievement configuration
+            modelBuilder.Entity<Achievement>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Code).HasMaxLength(50).IsRequired();
+                entity.Property(e => e.UnlockedAt).HasDefaultValueSql("NOW()");
+
+                entity.HasOne(e => e.User)
+                      .WithMany()
+                      .HasForeignKey(e => e.UserId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                // Each user can unlock each achievement only once
+                entity.HasIndex(e => new { e.UserId, e.Code }).IsUnique();
             });
 
         }

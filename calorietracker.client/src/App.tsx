@@ -5,12 +5,13 @@ import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import Foods from './pages/Foods';
 import Profile from './pages/Profile';
-import Statistics from './pages/Statistics'; // Додайте цей import
+import Statistics from './pages/Statistics';
+import Achievements from './pages/Achievements';
 import TopHeader from './components/TopHeader';
 import MobileBottomNavbar from './components/MobileBottomNavbar';
 import './App.css';
 
-// ... решта коду App.tsx
+// ... пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ App.tsx
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     return isAuthenticated() ? <>{children}</> : <Navigate to="/login" />;
@@ -64,6 +65,17 @@ function App() {
                             <ProtectedRoute>
                                 <TopHeader />
                                 <Profile />
+                                <MobileBottomNavbar />
+                            </ProtectedRoute>
+                        }
+                    />
+
+                    <Route
+                        path="/achievements"
+                        element={
+                            <ProtectedRoute>
+                                <TopHeader />
+                                <Achievements />
                                 <MobileBottomNavbar />
                             </ProtectedRoute>
                         }
