@@ -80,8 +80,8 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddHttpClient("OpenFoodFacts", c =>
 {
     c.BaseAddress = new Uri("https://world.openfoodfacts.org/");
-    c.DefaultRequestHeaders.Add("User-Agent", "CalorieTracker/1.0");
-    c.Timeout = TimeSpan.FromSeconds(30);
+    c.DefaultRequestHeaders.Add("User-Agent", "CalorieTracker/1.0 (vladyslavboiko2022@gmail.com)");
+    c.Timeout = TimeSpan.FromSeconds(15);
 });
 builder.Services.AddScoped<ExternalFoodService>();
 builder.Services.AddScoped<AchievementService>();

@@ -56,28 +56,35 @@ namespace CalorieTracker.Server.Services
 
         private async Task<List<ExternalFoodDto>> SearchOffAsync(string query)
         {
-            var client = _httpClientFactory.CreateClient("OpenFoodFacts");
-            var url = $"cgi/search.pl?action=process&search_terms={Uri.EscapeDataString(query)}&json=1&page_size=20&fields=product_name,product_name_uk,brands,nutriments,code,countries_tags";
+            try
+            {
+                var client = _httpClientFactory.CreateClient("OpenFoodFacts");
+                var url = $"cgi/search.pl?action=process&search_terms={Uri.EscapeDataString(query)}&json=1&page_size=20&fields=product_name,product_name_uk,brands,nutriments,code,countries_tags";
 
-            var response = await client.GetAsync(url);
-            response.EnsureSuccessStatusCode();
+                var response = await client.GetAsync(url);
+                if (!response.IsSuccessStatusCode) return [];
 
-            var content = await response.Content.ReadAsStringAsync();
-            var data = JsonSerializer.Deserialize<OffSearchResponse>(content,
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                var content = await response.Content.ReadAsStringAsync();
+                var data = JsonSerializer.Deserialize<OffSearchResponse>(content,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
-            if (data?.Products == null) return [];
+                if (data?.Products == null) return [];
 
-            var blockedCountries = new HashSet<string> { "en:russia", "en:belarus" };
+                var blockedCountries = new HashSet<string> { "en:russia", "en:belarus" };
 
-            return data.Products
-                .Where(p => !string.IsNullOrWhiteSpace(p.ProductName)
-                         && p.Nutriments != null
-                         && (p.CountriesTags == null || !p.CountriesTags.Any(t => blockedCountries.Contains(t.ToLower())))
-                         && !HasRussianChars(p.ProductName))
-                .Select(p => TryMapToDto(p))
-                .OfType<ExternalFoodDto>()
-                .ToList();
+                return data.Products
+                    .Where(p => !string.IsNullOrWhiteSpace(p.ProductName)
+                             && p.Nutriments != null
+                             && (p.CountriesTags == null || !p.CountriesTags.Any(t => blockedCountries.Contains(t.ToLower())))
+                             && !HasRussianChars(p.ProductName))
+                    .Select(p => TryMapToDto(p))
+                    .OfType<ExternalFoodDto>()
+                    .ToList();
+            }
+            catch
+            {
+                return [];
+            }
         }
 
         // Повертає null якщо продукт містить некоректні дані (NaN, Infinity тощо)

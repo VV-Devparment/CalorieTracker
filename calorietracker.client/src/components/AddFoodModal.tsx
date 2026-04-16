@@ -65,18 +65,18 @@ const AddFoodModal = ({ date, mealType, onClose, onFoodAdded }: AddFoodModalProp
     // Debounced external search
     useEffect(() => {
         if (!extQuery.trim()) { setExtResults([]); setExtError(null); return; }
-        const t = setTimeout(searchExternal, 400);
+        const currentQuery = extQuery;
+        const t = setTimeout(() => searchExternal(currentQuery), 500);
         return () => clearTimeout(t);
     }, [extQuery]);
 
-    const searchExternal = async () => {
-        if (!extQuery.trim()) return;
+    const searchExternal = async (query: string) => {
+        if (!query.trim()) return;
         setExtLoading(true);
         setExtError(null);
         try {
-            const res = await externalFoodsApi.searchByName(extQuery, 'ukraine');
+            const res = await externalFoodsApi.searchByName(query, 'ukraine');
             setExtResults(res.data);
-            if (res.data.length === 0) setExtError(null); // just empty, not an error
         } catch (err: any) {
             setExtResults([]);
             const msg = err?.response?.data?.message || err?.message || 'Невідома помилка';
