@@ -16,7 +16,9 @@ namespace CalorieTracker.Server.Services
             PropertyNameCaseInsensitive = true
         };
 
-        private static readonly TimeSpan PerRequestTimeout = TimeSpan.FromSeconds(8);
+        private static readonly TimeSpan PerAttemptTimeout = TimeSpan.FromSeconds(12);
+        private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(500);
+        private const int MaxAttempts = 2;
 
         private static readonly HashSet<string> BlockedCountries = new()
         {
@@ -46,7 +48,7 @@ namespace CalorieTracker.Server.Services
                 var url = $"api/v2/product/{Uri.EscapeDataString(barcode)}.json" +
                           $"?lc=uk&fields=product_name,product_name_uk,product_name_en,brands,nutriments,code,lang";
 
-                using var cts = new CancellationTokenSource(PerRequestTimeout);
+                using var cts = new CancellationTokenSource(PerAttemptTimeout);
                 var response = await client.GetAsync(url, cts.Token);
                 if (!response.IsSuccessStatusCode) return null;
 
@@ -61,7 +63,8 @@ namespace CalorieTracker.Server.Services
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "OFF barcode lookup failed for {Barcode}", barcode);
+                _logger.LogWarning("OFF barcode lookup failed for {Barcode}: {ExType} {Message}",
+                    barcode, ex.GetType().Name, ex.Message);
                 return null;
             }
         }
@@ -113,73 +116,104 @@ namespace CalorieTracker.Server.Services
 
         /// <summary>
         /// Legacy API: world.openfoodfacts.org/cgi/search.pl
-        /// Повертає null — API впав з помилкою. Повертає [] — запитів немає.
+        /// Повертає null — API впав з помилкою. Повертає [] — результатів немає.
         /// </summary>
-        private async Task<List<OffProduct>?> TrySearchLegacyAsync(string query, bool isCyrillic)
+        private Task<List<OffProduct>?> TrySearchLegacyAsync(string query, bool isCyrillic)
         {
-            try
-            {
-                var client = _httpClientFactory.CreateClient("OpenFoodFacts");
-                var lc = isCyrillic ? "uk" : "en";
-                var cc = isCyrillic ? "ua" : "world";
+            var lc = isCyrillic ? "uk" : "en";
+            var cc = isCyrillic ? "ua" : "world";
 
-                var url = $"cgi/search.pl?action=process" +
-                          $"&search_terms={Uri.EscapeDataString(query)}" +
-                          $"&search_simple=1&json=1&page_size=30" +
-                          $"&lc={lc}&cc={cc}" +
-                          $"&fields=product_name,product_name_uk,product_name_en,product_name_ru," +
-                          $"brands,nutriments,code,countries_tags,lang";
+            var url = $"cgi/search.pl?action=process" +
+                      $"&search_terms={Uri.EscapeDataString(query)}" +
+                      $"&search_simple=1&json=1&page_size=30" +
+                      $"&lc={lc}&cc={cc}" +
+                      $"&fields=product_name,product_name_uk,product_name_en,product_name_ru," +
+                      $"brands,nutriments,code,countries_tags,lang";
 
-                using var cts = new CancellationTokenSource(PerRequestTimeout);
-                var response = await client.GetAsync(url, cts.Token);
-                if (!response.IsSuccessStatusCode)
-                {
-                    _logger.LogWarning("OFF legacy returned {Status} for '{Query}'", response.StatusCode, query);
-                    return null;
-                }
-
-                var content = await response.Content.ReadAsStringAsync(cts.Token);
-                var data = JsonSerializer.Deserialize<OffSearchResponse>(content, JsonOpts);
-                return data?.Products ?? new List<OffProduct>();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "OFF legacy search failed for '{Query}'", query);
-                return null;
-            }
+            return FetchWithRetryAsync<OffSearchResponse>(
+                clientName: "OpenFoodFacts",
+                apiName: "legacy",
+                query: query,
+                relativeUrl: url,
+                extractor: r => r?.Products);
         }
 
         /// <summary>
         /// Modern Search-a-licious API: search.openfoodfacts.org
         /// </summary>
-        private async Task<List<OffProduct>?> TrySearchNewAsync(string query, bool isCyrillic)
+        private Task<List<OffProduct>?> TrySearchNewAsync(string query, bool isCyrillic)
         {
-            try
+            var langs = isCyrillic ? "uk,en" : "en";
+
+            var url = $"search?q={Uri.EscapeDataString(query)}" +
+                      $"&page_size=30&langs={langs}" +
+                      $"&fields=product_name,product_name_uk,product_name_en,brands,nutriments,code,countries_tags,lang";
+
+            return FetchWithRetryAsync<OffNewSearchResponse>(
+                clientName: "OpenFoodFactsSearch",
+                apiName: "modern",
+                query: query,
+                relativeUrl: url,
+                extractor: r => r?.Hits);
+        }
+
+        /// <summary>
+        /// Виконує HTTP-запит з retry на транзієнтних помилках (таймаут, 5xx, мережеві виняти).
+        /// Не ретраїть 4xx (наш запит поганий) і не затримує зайвий раз на успіху.
+        /// </summary>
+        private async Task<List<OffProduct>?> FetchWithRetryAsync<TResponse>(
+            string clientName,
+            string apiName,
+            string query,
+            string relativeUrl,
+            Func<TResponse?, List<OffProduct>?> extractor)
+            where TResponse : class
+        {
+            for (int attempt = 1; attempt <= MaxAttempts; attempt++)
             {
-                var client = _httpClientFactory.CreateClient("OpenFoodFactsSearch");
-                var langs = isCyrillic ? "uk,en" : "en";
-
-                var url = $"search?q={Uri.EscapeDataString(query)}" +
-                          $"&page_size=30&langs={langs}" +
-                          $"&fields=product_name,product_name_uk,product_name_en,brands,nutriments,code,countries_tags,lang";
-
-                using var cts = new CancellationTokenSource(PerRequestTimeout);
-                var response = await client.GetAsync(url, cts.Token);
-                if (!response.IsSuccessStatusCode)
+                try
                 {
-                    _logger.LogWarning("OFF modern returned {Status} for '{Query}'", response.StatusCode, query);
+                    var client = _httpClientFactory.CreateClient(clientName);
+                    using var cts = new CancellationTokenSource(PerAttemptTimeout);
+
+                    var response = await client.GetAsync(relativeUrl, cts.Token);
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        var status = (int)response.StatusCode;
+                        // 5xx and 429 — транзієнтні; 4xx (окрім 429) — постійні
+                        bool transient = status >= 500 || status == 429;
+                        _logger.LogWarning(
+                            "OFF {Api} HTTP {Status} for '{Query}' (attempt {Attempt}/{Max}, transient={Transient})",
+                            apiName, status, query, attempt, MaxAttempts, transient);
+
+                        if (transient && attempt < MaxAttempts)
+                        {
+                            await Task.Delay(RetryDelay);
+                            continue;
+                        }
+                        return null;
+                    }
+
+                    var content = await response.Content.ReadAsStringAsync(cts.Token);
+                    var data = JsonSerializer.Deserialize<TResponse>(content, JsonOpts);
+                    return extractor(data) ?? new List<OffProduct>();
+                }
+                catch (Exception ex) when (attempt < MaxAttempts)
+                {
+                    _logger.LogWarning(
+                        "OFF {Api} attempt {Attempt}/{Max} for '{Query}' threw {ExType}: {Message}. Retrying...",
+                        apiName, attempt, MaxAttempts, query, ex.GetType().Name, ex.Message);
+                    await Task.Delay(RetryDelay);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(
+                        "OFF {Api} exhausted retries for '{Query}' ({ExType}: {Message})",
+                        apiName, query, ex.GetType().Name, ex.Message);
                     return null;
                 }
-
-                var content = await response.Content.ReadAsStringAsync(cts.Token);
-                var data = JsonSerializer.Deserialize<OffNewSearchResponse>(content, JsonOpts);
-                return data?.Hits ?? new List<OffProduct>();
             }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "OFF modern search failed for '{Query}'", query);
-                return null;
-            }
+            return null;
         }
 
         /// <summary>
