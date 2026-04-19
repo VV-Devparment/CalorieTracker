@@ -9,136 +9,150 @@ namespace CalorieTracker.Server.Services
     {
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IMemoryCache _cache;
+        private readonly ILogger<ExternalFoodService> _logger;
 
-        public ExternalFoodService(IHttpClientFactory httpClientFactory, IMemoryCache cache)
+        private static readonly JsonSerializerOptions JsonOpts = new()
+        {
+            PropertyNameCaseInsensitive = true
+        };
+
+        private static readonly TimeSpan PerRequestTimeout = TimeSpan.FromSeconds(8);
+
+        private static readonly HashSet<string> BlockedCountries = new()
+        {
+            "en:russia", "en:belarus"
+        };
+
+        public ExternalFoodService(
+            IHttpClientFactory httpClientFactory,
+            IMemoryCache cache,
+            ILogger<ExternalFoodService> logger)
         {
             _httpClientFactory = httpClientFactory;
             _cache = cache;
+            _logger = logger;
         }
 
-        /// <summary>
-        /// Пошук за назвою у Open Food Facts.
-        /// Автоматично визначає мову запиту (укр/англ) і шукає у відповідних мовних полях.
-        /// </summary>
         public async Task<List<ExternalFoodDto>> SearchByNameAsync(string query, string source = "ukraine")
         {
-            // source залишений для сумісності з контролером, але зараз ігнорується
-            // (можна буде додати інші джерела пізніше)
             return await SearchOffAsync(query);
         }
 
-        /// <summary>
-        /// Пошук за штрих-кодом через Open Food Facts.
-        /// </summary>
         public async Task<ExternalFoodDto?> SearchByBarcodeAsync(string barcode)
         {
             try
             {
                 var client = _httpClientFactory.CreateClient("OpenFoodFacts");
-                // Додаємо lc=uk — тоді OFF поверне product_name українською, якщо вона є
                 var url = $"api/v2/product/{Uri.EscapeDataString(barcode)}.json" +
                           $"?lc=uk&fields=product_name,product_name_uk,product_name_en,brands,nutriments,code,lang";
 
-                var response = await client.GetAsync(url);
+                using var cts = new CancellationTokenSource(PerRequestTimeout);
+                var response = await client.GetAsync(url, cts.Token);
                 if (!response.IsSuccessStatusCode) return null;
 
-                var content = await response.Content.ReadAsStringAsync();
-                var data = JsonSerializer.Deserialize<OffBarcodeResponse>(content,
-                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                var content = await response.Content.ReadAsStringAsync(cts.Token);
+                var data = JsonSerializer.Deserialize<OffBarcodeResponse>(content, JsonOpts);
 
-                if (data?.Status != 1 || data.Product == null) return null;
+                if (data?.Status != 1 || data.Product?.Nutriments == null) return null;
 
                 var p = data.Product;
-                if (p.Nutriments == null) return null;
-
-                var bestName = GetBestName(p, preferUkrainian: true);
-                if (string.IsNullOrWhiteSpace(bestName)) return null;
-
                 p.Code = barcode;
                 return TryMapToDto(p, preferUkrainian: true);
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogWarning(ex, "OFF barcode lookup failed for {Barcode}", barcode);
                 return null;
             }
         }
 
-        // ── Open Food Facts ──────────────────────────────────────────────
-
         private async Task<List<ExternalFoodDto>> SearchOffAsync(string query)
         {
             var trimmed = query.Trim();
-            if (string.IsNullOrEmpty(trimmed))
-                return new List<ExternalFoodDto>();
+            if (trimmed.Length == 0) return new List<ExternalFoodDto>();
 
             var isCyrillic = ContainsCyrillic(trimmed);
-            var cacheKey = $"off:{(isCyrillic ? "uk" : "en")}:{trimmed.ToLowerInvariant()}";
+            var cacheKey = $"off:v3:{(isCyrillic ? "uk" : "en")}:{trimmed.ToLowerInvariant()}";
 
             if (_cache.TryGetValue(cacheKey, out List<ExternalFoodDto>? cached))
                 return cached!;
 
-            // Пробуємо спочатку legacy API (cgi/search.pl) — він стабільніший для full-text search
-            // і єдиний, що точно підтримує search_terms з мовними параметрами.
-            // Search-a-licious (новий API) поки в бета, використовуємо як fallback.
-            var results = await TrySearchLegacyApiAsync(trimmed, isCyrillic)
-                       ?? await TrySearchNewApiAsync(trimmed, isCyrillic);
+            // Пробуємо обидва API паралельно — це дає кращу latency + надійність.
+            // Якщо один API впаде/таймаутне, результати з іншого все одно прийдуть.
+            var legacyTask = TrySearchLegacyAsync(trimmed, isCyrillic);
+            var newTask = TrySearchNewAsync(trimmed, isCyrillic);
 
-            if (results == null)
-                throw new HttpRequestException("Open Food Facts недоступний. Спробуйте через кілька секунд.");
+            await Task.WhenAll(legacyTask, newTask);
 
-            if (results.Count > 0)
-                _cache.Set(cacheKey, results, TimeSpan.FromMinutes(10));
+            var legacy = legacyTask.Result;
+            var modern = newTask.Result;
 
-            return results;
+            // Обидва null = обидва API впали з помилкою (не "порожньо", а саме помилка).
+            if (legacy == null && modern == null)
+            {
+                _logger.LogError("Both OFF APIs failed for query '{Query}'", trimmed);
+                throw new HttpRequestException("Open Food Facts наразі недоступний. Спробуйте через кілька секунд.");
+            }
+
+            // Зливаємо результати, дедуплікуючи за barcode
+            var merged = new List<OffProduct>();
+            var seenCodes = new HashSet<string>();
+            foreach (var p in (legacy ?? new List<OffProduct>()).Concat(modern ?? new List<OffProduct>()))
+            {
+                var key = !string.IsNullOrWhiteSpace(p.Code) ? p.Code! : Guid.NewGuid().ToString();
+                if (seenCodes.Add(key)) merged.Add(p);
+            }
+
+            var mapped = RankAndMap(merged, trimmed, isCyrillic);
+
+            if (mapped.Count > 0)
+                _cache.Set(cacheKey, mapped, TimeSpan.FromMinutes(10));
+
+            return mapped;
         }
 
         /// <summary>
-        /// Legacy search API: cgi/search.pl
-        /// Підтримує lc= та cc= для локалізованого пошуку.
+        /// Legacy API: world.openfoodfacts.org/cgi/search.pl
+        /// Повертає null — API впав з помилкою. Повертає [] — запитів немає.
         /// </summary>
-        private async Task<List<ExternalFoodDto>?> TrySearchLegacyApiAsync(string query, bool isCyrillic)
+        private async Task<List<OffProduct>?> TrySearchLegacyAsync(string query, bool isCyrillic)
         {
             try
             {
                 var client = _httpClientFactory.CreateClient("OpenFoodFacts");
-
-                // lc — мова інтерфейсу (в якому мовному полі робити пошук та якою мовою повертати назви)
-                // cc — країна (впливає на популярність результатів у цій країні)
                 var lc = isCyrillic ? "uk" : "en";
                 var cc = isCyrillic ? "ua" : "world";
 
                 var url = $"cgi/search.pl?action=process" +
                           $"&search_terms={Uri.EscapeDataString(query)}" +
-                          $"&search_simple=1" +
-                          $"&json=1" +
-                          $"&page_size=20" +
-                          $"&lc={lc}" +
-                          $"&cc={cc}" +
+                          $"&search_simple=1&json=1&page_size=30" +
+                          $"&lc={lc}&cc={cc}" +
                           $"&fields=product_name,product_name_uk,product_name_en,product_name_ru," +
-                          $"brands,nutriments,code,countries_tags,lang,languages_codes";
+                          $"brands,nutriments,code,countries_tags,lang";
 
-                var response = await client.GetAsync(url);
-                if (!response.IsSuccessStatusCode) return null;
+                using var cts = new CancellationTokenSource(PerRequestTimeout);
+                var response = await client.GetAsync(url, cts.Token);
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning("OFF legacy returned {Status} for '{Query}'", response.StatusCode, query);
+                    return null;
+                }
 
-                var content = await response.Content.ReadAsStringAsync();
-                var data = JsonSerializer.Deserialize<OffSearchResponse>(content,
-                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-
-                if (data?.Products == null) return null;
-
-                return FilterAndMap(data.Products, preferUkrainian: isCyrillic);
+                var content = await response.Content.ReadAsStringAsync(cts.Token);
+                var data = JsonSerializer.Deserialize<OffSearchResponse>(content, JsonOpts);
+                return data?.Products ?? new List<OffProduct>();
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogWarning(ex, "OFF legacy search failed for '{Query}'", query);
                 return null;
             }
         }
 
         /// <summary>
-        /// Новий API (Search-a-licious): search.openfoodfacts.org
-        /// Використовується як fallback, бо API в бета-статусі.
+        /// Modern Search-a-licious API: search.openfoodfacts.org
         /// </summary>
-        private async Task<List<ExternalFoodDto>?> TrySearchNewApiAsync(string query, bool isCyrillic)
+        private async Task<List<OffProduct>?> TrySearchNewAsync(string query, bool isCyrillic)
         {
             try
             {
@@ -146,78 +160,150 @@ namespace CalorieTracker.Server.Services
                 var langs = isCyrillic ? "uk,en" : "en";
 
                 var url = $"search?q={Uri.EscapeDataString(query)}" +
-                          $"&page_size=20" +
-                          $"&langs={langs}" +
+                          $"&page_size=30&langs={langs}" +
                           $"&fields=product_name,product_name_uk,product_name_en,brands,nutriments,code,countries_tags,lang";
 
-                var response = await client.GetAsync(url);
-                if (!response.IsSuccessStatusCode) return null;
+                using var cts = new CancellationTokenSource(PerRequestTimeout);
+                var response = await client.GetAsync(url, cts.Token);
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning("OFF modern returned {Status} for '{Query}'", response.StatusCode, query);
+                    return null;
+                }
 
-                var content = await response.Content.ReadAsStringAsync();
-                var data = JsonSerializer.Deserialize<OffNewSearchResponse>(content,
-                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-
-                if (data?.Hits is not { Count: > 0 }) return null;
-
-                return FilterAndMap(data.Hits, preferUkrainian: isCyrillic);
+                var content = await response.Content.ReadAsStringAsync(cts.Token);
+                var data = JsonSerializer.Deserialize<OffNewSearchResponse>(content, JsonOpts);
+                return data?.Hits ?? new List<OffProduct>();
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogWarning(ex, "OFF modern search failed for '{Query}'", query);
                 return null;
             }
         }
 
-        private static List<ExternalFoodDto> FilterAndMap(List<OffProduct> products, bool preferUkrainian)
+        /// <summary>
+        /// Фільтрує продукти за релевантністю та сортує найрелевантніші першими.
+        /// Це найважливіше виправлення — раніше OFF повертав продукти, де запит
+        /// матчився в ingredients/categories, а назва була зовсім іншою.
+        /// </summary>
+        private static List<ExternalFoodDto> RankAndMap(List<OffProduct> products, string query, bool preferUkrainian)
         {
-            var blockedCountries = new HashSet<string> { "en:russia", "en:belarus" };
+            var queryTokens = Tokenize(query);
+            var scored = new List<(ExternalFoodDto dto, int score)>();
 
-            return products
-                .Where(p => p.Nutriments != null)
-                .Where(p => !string.IsNullOrWhiteSpace(GetBestName(p, preferUkrainian)))
-                .Where(p => p.CountriesTags == null ||
-                            !p.CountriesTags.Any(t => blockedCountries.Contains(t.ToLower())))
-                // Якщо користувач шукає українською, але єдина назва продукта російською —
-                // краще пропустити такий результат взагалі (показує шум).
-                .Where(p => !preferUkrainian || !IsOnlyRussian(p))
-                .Select(p => TryMapToDto(p, preferUkrainian))
-                .OfType<ExternalFoodDto>()
+            foreach (var p in products)
+            {
+                if (p.Nutriments == null) continue;
+                if (IsBlockedByCountry(p)) continue;
+
+                var displayName = GetBestName(p, preferUkrainian);
+                if (string.IsNullOrWhiteSpace(displayName)) continue;
+
+                // Перевірка релевантності: токени запиту мають зустрічатись
+                // хоча б в одному з мовних полів назви або в бренді.
+                // Інакше OFF повертає продукти, що матчились за інгредієнтами —
+                // а користувач шукав конкретну страву.
+                var relevance = ComputeRelevance(p, displayName, queryTokens);
+                if (relevance == 0) continue;
+
+                var dto = TryMapToDto(p, preferUkrainian);
+                if (dto == null) continue;
+
+                // Бонус: якщо запит укр. і у продукта є укр. назва — піднімаємо в ранзі
+                var score = relevance * 10;
+                if (preferUkrainian && !string.IsNullOrWhiteSpace(p.ProductNameUk))
+                    score += 5;
+
+                scored.Add((dto, score));
+            }
+
+            return scored
+                .OrderByDescending(x => x.score)
+                .Select(x => x.dto)
+                .Take(20)
                 .ToList();
         }
 
+        private static HashSet<string> Tokenize(string query)
+        {
+            return query.ToLowerInvariant()
+                .Split(new[] { ' ', '\t', ',', '.', '-', '_', '/', '\\', '(', ')' },
+                       StringSplitOptions.RemoveEmptyEntries)
+                .Where(t => t.Length >= 2)
+                .ToHashSet();
+        }
+
+        private static int ComputeRelevance(OffProduct p, string chosenName, HashSet<string> queryTokens)
+        {
+            if (queryTokens.Count == 0) return 1;
+
+            // Перевіряємо запит проти ВСІХ мовних варіантів назви + бренду.
+            // Тоді українські токени знайдуться в product_name_uk, англійські — в product_name_en,
+            // а на дисплей ми все одно покажемо назву, що відповідає мові користувача.
+            var haystack = string.Join(" ", new[]
+            {
+                chosenName,
+                p.ProductName,
+                p.ProductNameUk,
+                p.ProductNameEn,
+                p.ProductNameRu,
+                p.Brands
+            }.Where(s => !string.IsNullOrWhiteSpace(s))).ToLowerInvariant();
+
+            int score = 0;
+            foreach (var token in queryTokens)
+            {
+                if (haystack.Contains(token)) score++;
+            }
+            return score;
+        }
+
+        private static bool IsBlockedByCountry(OffProduct p)
+        {
+            if (p.CountriesTags == null) return false;
+            return p.CountriesTags.Any(t => BlockedCountries.Contains(t.ToLowerInvariant()));
+        }
+
         /// <summary>
-        /// Обирає найкращу назву з наявних мовних варіантів.
-        /// Якщо preferUkrainian=true: шукаємо uk → en → default.
-        /// Інакше: en → default → uk.
+        /// Обирає найкращу назву для відображення користувачу.
+        /// UA-користувач: uk → en (без кирилиці) → default (якщо не рос.)
+        /// EN-користувач: en (без кирилиці) → default (без кирилиці)
         /// </summary>
         private static string? GetBestName(OffProduct p, bool preferUkrainian)
         {
             if (preferUkrainian)
             {
-                if (!string.IsNullOrWhiteSpace(p.ProductNameUk)) return p.ProductNameUk;
-                if (!string.IsNullOrWhiteSpace(p.ProductNameEn) && !HasCyrillic(p.ProductNameEn))
-                    return p.ProductNameEn;
-                if (!string.IsNullOrWhiteSpace(p.ProductName) && !IsRussianText(p.ProductName))
-                    return p.ProductName;
+                if (IsReadableUkrainian(p.ProductNameUk)) return p.ProductNameUk;
+                if (IsReadableLatin(p.ProductNameEn)) return p.ProductNameEn;
+                if (IsReadableUkrainian(p.ProductName)) return p.ProductName;
+                if (IsReadableLatin(p.ProductName)) return p.ProductName;
                 return null;
             }
             else
             {
-                if (!string.IsNullOrWhiteSpace(p.ProductNameEn) && !HasCyrillic(p.ProductNameEn))
-                    return p.ProductNameEn;
-                if (!string.IsNullOrWhiteSpace(p.ProductName) && !HasCyrillic(p.ProductName))
-                    return p.ProductName;
+                if (IsReadableLatin(p.ProductNameEn)) return p.ProductNameEn;
+                if (IsReadableLatin(p.ProductName)) return p.ProductName;
                 return null;
             }
         }
 
-        private static bool IsOnlyRussian(OffProduct p)
-        {
-            var hasUk = !string.IsNullOrWhiteSpace(p.ProductNameUk);
-            var hasEnClean = !string.IsNullOrWhiteSpace(p.ProductNameEn) && !HasCyrillic(p.ProductNameEn);
-            if (hasUk || hasEnClean) return false;
+        /// <summary>Латинський текст без кирилиці (англ., франц., нім. тощо).</summary>
+        private static bool IsReadableLatin(string? text) =>
+            !string.IsNullOrWhiteSpace(text) && !ContainsCyrillic(text);
 
-            // Залишається тільки product_name — перевіряємо його.
-            return !string.IsNullOrWhiteSpace(p.ProductName) && IsRussianText(p.ProductName);
+        /// <summary>Український текст (відкидає суто російський).</summary>
+        private static bool IsReadableUkrainian(string? text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return false;
+            if (!ContainsCyrillic(text)) return false;
+
+            var hasRussianOnlyChars = text.Any(c => c is 'ы' or 'Ы' or 'э' or 'Э' or 'ъ' or 'Ъ' or 'ё' or 'Ё');
+            var hasUkrainianMarkers = text.Any(c => c is 'і' or 'І' or 'ї' or 'Ї' or 'є' or 'Є' or 'ґ' or 'Ґ');
+
+            // Якщо є рос. букви, але немає укр. маркерів — це російська.
+            if (hasRussianOnlyChars && !hasUkrainianMarkers) return false;
+            return true;
         }
 
         private static ExternalFoodDto? TryMapToDto(OffProduct p, bool preferUkrainian)
@@ -254,48 +340,19 @@ namespace CalorieTracker.Server.Services
             }
         }
 
-        // ── Визначення мови ──────────────────────────────────────────────
-
-        /// <summary>Перевіряє, чи є в рядку хоча б одна кирилична літера.</summary>
         private static bool ContainsCyrillic(string? text) =>
             text != null && text.Any(c => c >= '\u0400' && c <= '\u04FF');
-
-        /// <summary>Те саме, що ContainsCyrillic — для читабельності.</summary>
-        private static bool HasCyrillic(string? text) => ContainsCyrillic(text);
-
-        /// <summary>
-        /// Евристика для визначення саме російського тексту.
-        /// Базуємось на літерах, яких немає в укр. абетці (ы, э, ъ, ё)
-        /// АБО на характерних російських закінченнях/словах.
-        /// </summary>
-        private static bool IsRussianText(string? text)
-        {
-            if (string.IsNullOrWhiteSpace(text)) return false;
-            if (!ContainsCyrillic(text)) return false;
-
-            // Літери, яких точно немає в українській
-            if (text.Any(c => c is 'ы' or 'Ы' or 'э' or 'Э' or 'ъ' or 'Ъ' or 'ё' or 'Ё'))
-                return true;
-
-            // Літери, яких немає в російській (і, ї, є, ґ) — значить це точно укр.
-            if (text.Any(c => c is 'і' or 'І' or 'ї' or 'Ї' or 'є' or 'Є' or 'ґ' or 'Ґ'))
-                return false;
-
-            // Залишилась неоднозначність (напр. "молоко" — однакове в обох мовах).
-            // У такому випадку повертаємо false — не блокуємо.
-            return false;
-        }
 
         // ── Response models ──────────────────────────────────────────────
 
         private class OffNewSearchResponse
         {
-            public List<OffProduct> Hits { get; set; } = [];
+            public List<OffProduct> Hits { get; set; } = new();
         }
 
         private class OffSearchResponse
         {
-            public List<OffProduct> Products { get; set; } = [];
+            public List<OffProduct> Products { get; set; } = new();
         }
 
         private class OffBarcodeResponse
