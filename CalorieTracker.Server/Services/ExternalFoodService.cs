@@ -63,14 +63,19 @@ namespace CalorieTracker.Server.Services
             if (_cache.TryGetValue(cacheKey, out List<ExternalFoodDto>? cached))
                 return cached!;
 
-            // Пробуємо новий пошуковий API (search.openfoodfacts.org) — стабільніший
-            var results = await TrySearchNewApiAsync(query)
-                       ?? await TrySearchLegacyApiAsync(query);
+            // Fallback to legacy if new API returns null OR empty list
+            var newResults = await TrySearchNewApiAsync(query);
+            var results = (newResults is { Count: > 0 })
+                ? newResults
+                : await TrySearchLegacyApiAsync(query);
 
             if (results == null)
                 throw new HttpRequestException("Open Food Facts недоступний. Спробуйте через кілька секунд.");
 
-            _cache.Set(cacheKey, results, TimeSpan.FromMinutes(10));
+            // Don't cache empty results — allow retry on next request
+            if (results.Count > 0)
+                _cache.Set(cacheKey, results, TimeSpan.FromMinutes(10));
+
             return results;
         }
 
@@ -88,7 +93,7 @@ namespace CalorieTracker.Server.Services
                 var data = JsonSerializer.Deserialize<OffNewSearchResponse>(content,
                     new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
-                if (data?.Hits == null) return null;
+                if (data?.Hits is not { Count: > 0 }) return null;
 
                 var blockedCountries = new HashSet<string> { "en:russia", "en:belarus" };
 
