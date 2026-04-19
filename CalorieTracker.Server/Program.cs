@@ -74,6 +74,7 @@ builder.Services.AddAuthentication(options =>
 });
 
 // Register services
+builder.Services.AddMemoryCache();
 builder.Services.AddScoped<IAuthService, AuthService>();
 
 // Register HTTP clients for external food APIs
@@ -81,7 +82,13 @@ builder.Services.AddHttpClient("OpenFoodFacts", c =>
 {
     c.BaseAddress = new Uri("https://world.openfoodfacts.org/");
     c.DefaultRequestHeaders.Add("User-Agent", "CalorieTracker/1.0 (vladyslavboiko2022@gmail.com)");
-    c.Timeout = TimeSpan.FromSeconds(15);
+    c.Timeout = TimeSpan.FromSeconds(25);
+});
+builder.Services.AddHttpClient("OpenFoodFactsSearch", c =>
+{
+    c.BaseAddress = new Uri("https://search.openfoodfacts.org/");
+    c.DefaultRequestHeaders.Add("User-Agent", "CalorieTracker/1.0 (vladyslavboiko2022@gmail.com)");
+    c.Timeout = TimeSpan.FromSeconds(25);
 });
 builder.Services.AddScoped<ExternalFoodService>();
 builder.Services.AddScoped<AchievementService>();

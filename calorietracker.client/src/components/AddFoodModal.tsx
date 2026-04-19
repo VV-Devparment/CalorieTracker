@@ -66,7 +66,7 @@ const AddFoodModal = ({ date, mealType, onClose, onFoodAdded }: AddFoodModalProp
     useEffect(() => {
         if (!extQuery.trim()) { setExtResults([]); setExtError(null); return; }
         const currentQuery = extQuery;
-        const t = setTimeout(() => searchExternal(currentQuery), 500);
+        const t = setTimeout(() => searchExternal(currentQuery), 800);
         return () => clearTimeout(t);
     }, [extQuery]);
 

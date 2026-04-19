@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.Caching.Memory;
 using CalorieTracker.Server.DTOs;
 
 namespace CalorieTracker.Server.Services
@@ -7,10 +8,12 @@ namespace CalorieTracker.Server.Services
     public class ExternalFoodService
     {
         private readonly IHttpClientFactory _httpClientFactory;
+        private readonly IMemoryCache _cache;
 
-        public ExternalFoodService(IHttpClientFactory httpClientFactory)
+        public ExternalFoodService(IHttpClientFactory httpClientFactory, IMemoryCache cache)
         {
             _httpClientFactory = httpClientFactory;
+            _cache = cache;
         }
 
         /// <summary>
@@ -56,34 +59,84 @@ namespace CalorieTracker.Server.Services
 
         private async Task<List<ExternalFoodDto>> SearchOffAsync(string query)
         {
+            var cacheKey = $"off:{query.ToLowerInvariant().Trim()}";
+            if (_cache.TryGetValue(cacheKey, out List<ExternalFoodDto>? cached))
+                return cached!;
+
+            // Пробуємо новий пошуковий API (search.openfoodfacts.org) — стабільніший
+            var results = await TrySearchNewApiAsync(query)
+                       ?? await TrySearchLegacyApiAsync(query);
+
+            if (results == null)
+                throw new HttpRequestException("Open Food Facts недоступний. Спробуйте через кілька секунд.");
+
+            _cache.Set(cacheKey, results, TimeSpan.FromMinutes(10));
+            return results;
+        }
+
+        private async Task<List<ExternalFoodDto>?> TrySearchNewApiAsync(string query)
+        {
             try
             {
-                var client = _httpClientFactory.CreateClient("OpenFoodFacts");
-                var url = $"cgi/search.pl?action=process&search_terms={Uri.EscapeDataString(query)}&json=1&page_size=20&fields=product_name,product_name_uk,brands,nutriments,code,countries_tags";
+                var client = _httpClientFactory.CreateClient("OpenFoodFactsSearch");
+                var url = $"search?q={Uri.EscapeDataString(query)}&page_size=20&fields=product_name,product_name_uk,brands,nutriments,code,countries_tags";
 
                 var response = await client.GetAsync(url);
-                if (!response.IsSuccessStatusCode) return [];
+                if (!response.IsSuccessStatusCode) return null;
 
                 var content = await response.Content.ReadAsStringAsync();
-                var data = JsonSerializer.Deserialize<OffSearchResponse>(content,
+                var data = JsonSerializer.Deserialize<OffNewSearchResponse>(content,
                     new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
-                if (data?.Products == null) return [];
+                if (data?.Hits == null) return null;
 
                 var blockedCountries = new HashSet<string> { "en:russia", "en:belarus" };
 
-                return data.Products
-                    .Where(p => !string.IsNullOrWhiteSpace(p.ProductName)
+                return data.Hits
+                    .Where(p => (!string.IsNullOrWhiteSpace(p.ProductName) || !string.IsNullOrWhiteSpace(p.ProductNameUk))
                              && p.Nutriments != null
                              && (p.CountriesTags == null || !p.CountriesTags.Any(t => blockedCountries.Contains(t.ToLower())))
-                             && !HasRussianChars(p.ProductName))
+                             && (!string.IsNullOrWhiteSpace(p.ProductNameUk) || !HasRussianChars(p.ProductName)))
                     .Select(p => TryMapToDto(p))
                     .OfType<ExternalFoodDto>()
                     .ToList();
             }
             catch
             {
-                return [];
+                return null;
+            }
+        }
+
+        private async Task<List<ExternalFoodDto>?> TrySearchLegacyApiAsync(string query)
+        {
+            try
+            {
+                var client = _httpClientFactory.CreateClient("OpenFoodFacts");
+                var url = $"cgi/search.pl?action=process&search_terms={Uri.EscapeDataString(query)}&json=1&page_size=20&fields=product_name,product_name_uk,brands,nutriments,code,countries_tags";
+
+                var response = await client.GetAsync(url);
+                if (!response.IsSuccessStatusCode) return null;
+
+                var content = await response.Content.ReadAsStringAsync();
+                var data = JsonSerializer.Deserialize<OffSearchResponse>(content,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                if (data?.Products == null) return null;
+
+                var blockedCountries = new HashSet<string> { "en:russia", "en:belarus" };
+
+                return data.Products
+                    .Where(p => (!string.IsNullOrWhiteSpace(p.ProductName) || !string.IsNullOrWhiteSpace(p.ProductNameUk))
+                             && p.Nutriments != null
+                             && (p.CountriesTags == null || !p.CountriesTags.Any(t => blockedCountries.Contains(t.ToLower())))
+                             && (!string.IsNullOrWhiteSpace(p.ProductNameUk) || !HasRussianChars(p.ProductName)))
+                    .Select(p => TryMapToDto(p))
+                    .OfType<ExternalFoodDto>()
+                    .ToList();
+            }
+            catch
+            {
+                return null;
             }
         }
 
@@ -129,6 +182,13 @@ namespace CalorieTracker.Server.Services
 
         // ── Response models ──────────────────────────────────────────────
 
+        // Новий API: search.openfoodfacts.org
+        private class OffNewSearchResponse
+        {
+            public List<OffProduct> Hits { get; set; } = [];
+        }
+
+        // Старий API: world.openfoodfacts.org/cgi/search.pl
         private class OffSearchResponse
         {
             public List<OffProduct> Products { get; set; } = [];
