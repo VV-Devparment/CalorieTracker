@@ -335,21 +335,21 @@ const Profile = () => {
                             <div className="space-y-6">
                                 {/* Personal Info */}
                                 <div>
-                                    <div className="flex justify-between items-center mb-4">
+                                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
                                         <h3 className="text-lg font-semibold text-gray-900">Особиста інформація</h3>
                                         {!editing ? (
                                             <button
                                                 onClick={() => setEditing(true)}
-                                                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
+                                                className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center space-x-2"
                                             >
                                                 <Icon name="edit" size={16} color="white" />
                                                 <span>Редагувати</span>
                                             </button>
                                         ) : (
-                                            <div className="flex items-center gap-4">
+                                            <div className="flex items-center gap-2 w-full sm:w-auto">
                                                 <button
                                                     onClick={() => setEditing(false)}
-                                                    className="w-36 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors flex items-center justify-center space-x-2"
+                                                    className="flex-1 sm:flex-none sm:w-36 px-3 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors flex items-center justify-center gap-1.5 text-sm"
                                                 >
                                                     <Icon name="close" size={16} color="gray" />
                                                     <span>Скасувати</span>
@@ -357,7 +357,7 @@ const Profile = () => {
                                                 <button
                                                     onClick={handleSave}
                                                     disabled={loading}
-                                                    className="w-36 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center justify-center space-x-2"
+                                                    className="flex-1 sm:flex-none sm:w-36 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5 text-sm"
                                                 >
                                                     <Icon name="save" size={16} color="white" />
                                                     <span>{loading ? 'Збереження...' : 'Зберегти'}</span>

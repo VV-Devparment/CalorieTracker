@@ -277,16 +277,16 @@ const UsersTab: React.FC = () => {
                     <EmptyState text="Користувачів не знайдено" />
                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
+                        <table className="w-full min-w-[900px] text-sm">
                             <thead className="bg-gray-50 border-b border-gray-200">
                                 <tr className="text-left text-xs uppercase tracking-wide text-gray-500">
-                                    <th className="py-3 px-4">Користувач</th>
-                                    <th className="py-3 px-4 hidden md:table-cell">Роль</th>
-                                    <th className="py-3 px-4 hidden md:table-cell">Зареєстр.</th>
-                                    <th className="py-3 px-4 hidden lg:table-cell">Активність</th>
-                                    <th className="py-3 px-4 hidden sm:table-cell">Прийоми</th>
-                                    <th className="py-3 px-4">Статус</th>
-                                    <th className="py-3 px-4 text-right">Дії</th>
+                                    <th className="py-3 px-4 whitespace-nowrap">Користувач</th>
+                                    <th className="py-3 px-4 whitespace-nowrap">Роль</th>
+                                    <th className="py-3 px-4 whitespace-nowrap">Зареєстр.</th>
+                                    <th className="py-3 px-4 whitespace-nowrap">Активність</th>
+                                    <th className="py-3 px-4 whitespace-nowrap">Прийоми</th>
+                                    <th className="py-3 px-4 whitespace-nowrap">Статус</th>
+                                    <th className="py-3 px-4 text-right whitespace-nowrap">Дії</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
@@ -307,7 +307,7 @@ const UsersTab: React.FC = () => {
                                                 </div>
                                             </div>
                                         </td>
-                                        <td className="py-3 px-4 hidden md:table-cell">
+                                        <td className="py-3 px-4 whitespace-nowrap">
                                             {u.role === 'Admin' ? (
                                                 <span className="inline-block text-[10px] font-bold tracking-wide px-2 py-0.5 rounded-full bg-gradient-to-r from-orange-500 to-lime-500 text-white">
                                                     ADMIN
@@ -316,11 +316,11 @@ const UsersTab: React.FC = () => {
                                                 <span className="text-xs text-gray-500">User</span>
                                             )}
                                         </td>
-                                        <td className="py-3 px-4 hidden md:table-cell text-xs text-gray-600">{formatDate(u.createdAt)}</td>
-                                        <td className="py-3 px-4 hidden lg:table-cell text-xs text-gray-600">
+                                        <td className="py-3 px-4 text-xs text-gray-600 whitespace-nowrap">{formatDate(u.createdAt)}</td>
+                                        <td className="py-3 px-4 text-xs text-gray-600 whitespace-nowrap">
                                             {u.lastActivityAt ? formatDate(u.lastActivityAt) : '—'}
                                         </td>
-                                        <td className="py-3 px-4 hidden sm:table-cell text-xs text-gray-600">{u.mealsCount}</td>
+                                        <td className="py-3 px-4 text-xs text-gray-600 whitespace-nowrap">{u.mealsCount}</td>
                                         <td className="py-3 px-4">
                                             {u.isBlocked ? (
                                                 <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">
@@ -612,36 +612,36 @@ const FoodsTab: React.FC = () => {
                     <EmptyState text="Custom-продуктів не знайдено" />
                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
+                        <table className="w-full min-w-[850px] text-sm">
                             <thead className="bg-gray-50 border-b border-gray-200">
                                 <tr className="text-left text-xs uppercase tracking-wide text-gray-500">
-                                    <th className="py-3 px-4">Продукт</th>
-                                    <th className="py-3 px-4 hidden md:table-cell">Автор</th>
-                                    <th className="py-3 px-4 hidden sm:table-cell">Калорії/100г</th>
-                                    <th className="py-3 px-4 hidden lg:table-cell">Б / Ж / В</th>
-                                    <th className="py-3 px-4 hidden md:table-cell">Дата</th>
-                                    <th className="py-3 px-4 text-right">Дії</th>
+                                    <th className="py-3 px-4 whitespace-nowrap">Продукт</th>
+                                    <th className="py-3 px-4 whitespace-nowrap">Автор</th>
+                                    <th className="py-3 px-4 whitespace-nowrap">Калорії/100г</th>
+                                    <th className="py-3 px-4 whitespace-nowrap">Б / Ж / В</th>
+                                    <th className="py-3 px-4 whitespace-nowrap">Дата</th>
+                                    <th className="py-3 px-4 text-right whitespace-nowrap">Дії</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
                                 {items.map(f => (
                                     <tr key={f.id} className="hover:bg-gray-50">
                                         <td className="py-3 px-4">
-                                            <p className="font-medium text-gray-900">{f.name}</p>
-                                            {f.brand && <p className="text-xs text-gray-500">{f.brand}</p>}
+                                            <p className="font-medium text-gray-900 whitespace-nowrap">{f.name}</p>
+                                            {f.brand && <p className="text-xs text-gray-500 whitespace-nowrap">{f.brand}</p>}
                                         </td>
-                                        <td className="py-3 px-4 hidden md:table-cell text-xs text-gray-600">
+                                        <td className="py-3 px-4 text-xs text-gray-600 whitespace-nowrap">
                                             {f.createdByName ?? <span className="italic text-gray-400">видалений</span>}
                                             {f.createdByEmail && <span className="block text-[11px] text-gray-400">{f.createdByEmail}</span>}
                                         </td>
-                                        <td className="py-3 px-4 hidden sm:table-cell font-semibold text-gray-900">
+                                        <td className="py-3 px-4 font-semibold text-gray-900 whitespace-nowrap">
                                             {Number(f.caloriesPer100g).toFixed(0)}
                                         </td>
-                                        <td className="py-3 px-4 hidden lg:table-cell text-xs text-gray-600">
+                                        <td className="py-3 px-4 text-xs text-gray-600 whitespace-nowrap">
                                             {Number(f.proteinPer100g).toFixed(1)} / {Number(f.fatsPer100g).toFixed(1)} / {Number(f.carbsPer100g).toFixed(1)}
                                         </td>
-                                        <td className="py-3 px-4 hidden md:table-cell text-xs text-gray-600">{formatDate(f.createdAt)}</td>
-                                        <td className="py-3 px-4 text-right">
+                                        <td className="py-3 px-4 text-xs text-gray-600 whitespace-nowrap">{formatDate(f.createdAt)}</td>
+                                        <td className="py-3 px-4 text-right whitespace-nowrap">
                                             <button
                                                 onClick={() => setEditing(f)}
                                                 className="text-xs font-medium text-orange-600 hover:text-orange-800 px-2 py-1 rounded-lg hover:bg-orange-50 mr-1"
