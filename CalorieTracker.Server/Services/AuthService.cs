@@ -29,11 +29,13 @@ namespace CalorieTracker.Server.Services
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey!));
             var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
+            // Role видається через ClaimTypes.Role щоб [Authorize(Roles = "Admin")] працював out-of-the-box.
             var claims = new List<Claim>
             {
                 new(ClaimTypes.NameIdentifier, user.Id.ToString()),
                 new(ClaimTypes.Email, user.Email),
                 new(ClaimTypes.Name, user.Name),
+                new(ClaimTypes.Role, string.IsNullOrWhiteSpace(user.Role) ? "User" : user.Role),
                 new("userId", user.Id.ToString())
             };
 

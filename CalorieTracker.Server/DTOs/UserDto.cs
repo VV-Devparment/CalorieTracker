@@ -44,7 +44,11 @@ namespace CalorieTracker.Server.DTOs
         public string? Gender { get; set; }
         public int ActivityLevel { get; set; }
         public int? DailyCalorieGoal { get; set; }
+        public string? AvatarUrl { get; set; }
         public DateTime CreatedAt { get; set; }
+        // Видається фронтенду, щоб умовно показувати лінк "Адмін-панель" у дропдауні профілю.
+        // Реальна авторизація — на бекенді через [Authorize(Roles = "Admin")].
+        public string Role { get; set; } = "User";
     }
 
     public class UserUpdateDto
@@ -57,6 +61,12 @@ namespace CalorieTracker.Server.DTOs
         public string? Gender { get; set; }
         public int? ActivityLevel { get; set; }
         // DailyCalorieGoal is NOT stored — it is computed from anthropometrics (3NF)
+
+    }
+
+    public class AvatarResponseDto
+    {
+        public string? AvatarUrl { get; set; }
     }
 
     public class AuthResponseDto

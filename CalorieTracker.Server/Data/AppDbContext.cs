@@ -17,6 +17,7 @@ namespace CalorieTracker.Server.Data
         public DbSet<UserGoal> UserGoals { get; set; }
         public DbSet<WeightRecord> WeightRecords { get; set; }
         public DbSet<Achievement> Achievements { get; set; }
+        public DbSet<AuditLog> AuditLogs { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -35,6 +36,11 @@ namespace CalorieTracker.Server.Data
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("NOW()");
 
+                // Admin/moderation
+                entity.Property(e => e.Role).HasMaxLength(20).HasDefaultValue("User");
+                entity.Property(e => e.IsBlocked).HasDefaultValue(false);
+                entity.Property(e => e.BlockedReason).HasMaxLength(500);
+                entity.HasIndex(e => e.Role); // швидкий count(Admin) для статистики
             });
 
             // Food configuration
@@ -158,6 +164,31 @@ namespace CalorieTracker.Server.Data
 
                 // Each user can unlock each achievement only once
                 entity.HasIndex(e => new { e.UserId, e.Code }).IsUnique();
+            });
+
+            // AuditLog configuration
+            modelBuilder.Entity<AuditLog>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Action).HasMaxLength(50).IsRequired();
+                entity.Property(e => e.Level).HasMaxLength(20).HasDefaultValue("Info");
+                entity.Property(e => e.ActorEmail).HasMaxLength(255);
+                entity.Property(e => e.EntityType).HasMaxLength(50);
+                entity.Property(e => e.Details).HasMaxLength(2000);
+                entity.Property(e => e.IpAddress).HasMaxLength(50);
+                entity.Property(e => e.Path).HasMaxLength(255);
+                entity.Property(e => e.Timestamp).HasDefaultValueSql("NOW()");
+
+                // Actor: SetNull щоб видалення юзера не каскадувало журнал.
+                entity.HasOne(e => e.Actor)
+                      .WithMany()
+                      .HasForeignKey(e => e.ActorUserId)
+                      .OnDelete(DeleteBehavior.SetNull);
+
+                // Найбільш типові запити — за часом і за актором; індексуємо.
+                entity.HasIndex(e => e.Timestamp);
+                entity.HasIndex(e => e.ActorUserId);
+                entity.HasIndex(e => e.Action);
             });
 
         }

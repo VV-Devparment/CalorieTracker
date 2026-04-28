@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { BrowserMultiFormatReader } from '@zxing/browser';
+import { BrowserMultiFormatReader, IScannerControls } from '@zxing/browser';
 import { DecodeHintType, BarcodeFormat, NotFoundException } from '@zxing/library';
 
 interface BarcodeScannerModalProps {
@@ -7,36 +7,48 @@ interface BarcodeScannerModalProps {
     onClose: () => void;
 }
 
+// Тільки product-barcode формати — QR/DataMatrix часто URL/JSON, не GTIN.
+const PRODUCT_FORMATS = [
+    BarcodeFormat.EAN_13,
+    BarcodeFormat.EAN_8,
+    BarcodeFormat.UPC_A,
+    BarcodeFormat.UPC_E,
+    BarcodeFormat.CODE_128,
+    BarcodeFormat.CODE_39,
+    BarcodeFormat.ITF,
+];
+
 const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({ onDetected, onClose }) => {
     const videoRef = useRef<HTMLVideoElement>(null);
-    const readerRef = useRef<BrowserMultiFormatReader | null>(null);
+    const controlsRef = useRef<IScannerControls | null>(null);
     const detectedRef = useRef(false);
+    const cancelledRef = useRef(false);
+    // Тримаємо актуальний onDetected у ref, щоб ефект не перезапускав камеру,
+    // коли батько передає нове замикання на кожен рендер.
+    const onDetectedRef = useRef(onDetected);
+    onDetectedRef.current = onDetected;
+
     const [error, setError] = useState<string | null>(null);
     const [scanning, setScanning] = useState(false);
 
     useEffect(() => {
         const hints = new Map();
-        hints.set(DecodeHintType.POSSIBLE_FORMATS, [
-            BarcodeFormat.EAN_13,
-            BarcodeFormat.EAN_8,
-            BarcodeFormat.UPC_A,
-            BarcodeFormat.UPC_E,
-            BarcodeFormat.CODE_128,
-            BarcodeFormat.CODE_39,
-            BarcodeFormat.ITF,
-            BarcodeFormat.DATA_MATRIX,
-            BarcodeFormat.QR_CODE,
-        ]);
+        hints.set(DecodeHintType.POSSIBLE_FORMATS, PRODUCT_FORMATS);
         hints.set(DecodeHintType.TRY_HARDER, true);
 
         const reader = new BrowserMultiFormatReader(hints);
-        readerRef.current = reader;
 
-        let controls: Awaited<ReturnType<typeof reader.decodeFromConstraints>> | null = null;
+        const stopVideoTracks = () => {
+            // Підстраховка: якщо controls.stop() не зупинив трек (наприклад, ми
+            // ще не отримали controls на момент unmount), глушимо вручну.
+            const stream = videoRef.current?.srcObject as MediaStream | null;
+            stream?.getTracks().forEach(t => t.stop());
+            if (videoRef.current) videoRef.current.srcObject = null;
+        };
 
         const startScanner = async () => {
             try {
-                controls = await reader.decodeFromConstraints(
+                const controls = await reader.decodeFromConstraints(
                     {
                         video: {
                             facingMode: 'environment',
@@ -48,32 +60,63 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({ onDetected, o
                     (result, err) => {
                         if (result && !detectedRef.current) {
                             detectedRef.current = true;
-                            controls?.stop();
-                            onDetected(result.getText());
+                            controlsRef.current?.stop();
+                            stopVideoTracks();
+
+                            // ZXing для EAN/UPC/CODE_128 повертає рядок з цифрами;
+                            // підстраховуємось — лишаємо тільки цифри для бекенда.
+                            const raw = result.getText().trim();
+                            const digits = raw.replace(/\D+/g, '');
+                            onDetectedRef.current(digits.length >= 6 ? digits : raw);
                         }
                         if (err && !(err instanceof NotFoundException)) {
+                            // NotFoundException = "у цьому кадрі ще не знайшли" — нормально.
+                            // Інше — справжня помилка декодеру; шумно для прод, ок для dev.
                             console.warn('Decode error:', err);
                         }
                     }
                 );
+
+                // Якщо користувач закрив модалку поки тривав await — одразу зупиняємо.
+                if (cancelledRef.current) {
+                    controls.stop();
+                    stopVideoTracks();
+                    return;
+                }
+
+                controlsRef.current = controls;
                 setScanning(true);
-            } catch (err) {
+            } catch (err: any) {
                 console.error('Camera error:', err);
-                setError('Не вдалося отримати доступ до камери. Переконайтеся, що ви дозволили доступ.');
+                stopVideoTracks();
+
+                // Розрізняємо причини, бо UX дій різний:
+                // - NotAllowedError → користувач натиснув "Заборонити" в браузері
+                // - NotFoundError   → камери немає взагалі (десктоп без вебки)
+                // - NotReadableError → інший застосунок зайняв камеру
+                const name = err?.name as string | undefined;
+                if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+                    setError('Доступ до камери заборонено. Дозвольте камеру в налаштуваннях браузера й оновіть сторінку.');
+                } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+                    setError('Камеру не знайдено. Переконайтеся, що пристрій має камеру.');
+                } else if (name === 'NotReadableError' || name === 'TrackStartError') {
+                    setError('Камера зайнята іншим застосунком. Закрийте інші вкладки/програми, які її використовують.');
+                } else {
+                    setError('Не вдалося запустити камеру. Спробуйте ще раз або введіть штрих-код вручну.');
+                }
             }
         };
 
         startScanner();
 
         return () => {
-            controls?.stop();
+            cancelledRef.current = true;
+            controlsRef.current?.stop();
+            controlsRef.current = null;
+            stopVideoTracks();
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
-
-    const handleClose = () => {
-        readerRef.current; // keep ref alive until controls.stop() in cleanup
-        onClose();
-    };
 
     return (
         <div style={{
@@ -98,7 +141,6 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({ onDetected, o
                 </div>
             ) : (
                 <div style={{ position: 'relative', width: '100%', maxWidth: '380px' }}>
-                    {/* Video stream */}
                     <video
                         ref={videoRef}
                         style={{
@@ -110,9 +152,9 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({ onDetected, o
                         }}
                         muted
                         playsInline
+                        autoPlay
                     />
 
-                    {/* Targeting overlay */}
                     {scanning && (
                         <div style={{
                             position: 'absolute', top: '50%', left: '50%',
@@ -121,7 +163,6 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({ onDetected, o
                             border: '2px solid #3b82f6', borderRadius: '6px',
                             pointerEvents: 'none', boxShadow: '0 0 0 9999px rgba(0,0,0,0.4)'
                         }}>
-                            {/* Scanning line animation */}
                             <div style={{
                                 position: 'absolute',
                                 left: 4, right: 4,
@@ -131,7 +172,6 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({ onDetected, o
                                 top: '50%',
                                 opacity: 0.8,
                             }} />
-                            {/* Corner accents */}
                             {[
                                 { top: -2, left: -2, borderTop: '4px solid #60a5fa', borderLeft: '4px solid #60a5fa' },
                                 { top: -2, right: -2, borderTop: '4px solid #60a5fa', borderRight: '4px solid #60a5fa' },
@@ -154,7 +194,7 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({ onDetected, o
             `}</style>
 
             <button
-                onClick={handleClose}
+                onClick={onClose}
                 style={{
                     marginTop: '28px', padding: '12px 40px',
                     backgroundColor: '#374151', color: 'white',

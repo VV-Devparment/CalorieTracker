@@ -75,20 +75,20 @@ builder.Services.AddAuthentication(options =>
 
 // Register services
 builder.Services.AddMemoryCache();
+builder.Services.AddHttpContextAccessor(); // потрібен AuditService для extraction юзера/IP
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IAuditService, AuditService>();
 
-// Register HTTP clients for external food APIs
-builder.Services.AddHttpClient("OpenFoodFacts", c =>
+// HTTP clients for FatSecret Platform API (OAuth 2.0) — Premier Free (US data set).
+builder.Services.AddHttpClient("FatSecretAuth", c =>
 {
-    c.BaseAddress = new Uri("https://world.openfoodfacts.org/");
-    c.DefaultRequestHeaders.Add("User-Agent", "CalorieTracker/1.0 (vladyslavboiko2022@gmail.com)");
-    c.Timeout = TimeSpan.FromSeconds(25);
+    c.BaseAddress = new Uri("https://oauth.fatsecret.com/");
+    c.Timeout = TimeSpan.FromSeconds(15);
 });
-builder.Services.AddHttpClient("OpenFoodFactsSearch", c =>
+builder.Services.AddHttpClient("FatSecretApi", c =>
 {
-    c.BaseAddress = new Uri("https://search.openfoodfacts.org/");
-    c.DefaultRequestHeaders.Add("User-Agent", "CalorieTracker/1.0 (vladyslavboiko2022@gmail.com)");
-    c.Timeout = TimeSpan.FromSeconds(25);
+    c.BaseAddress = new Uri("https://platform.fatsecret.com/");
+    c.Timeout = TimeSpan.FromSeconds(15);
 });
 builder.Services.AddScoped<ExternalFoodService>();
 builder.Services.AddScoped<AchievementService>();
@@ -131,6 +131,9 @@ app.UseCors("AllowReactApp");
 // Use Authentication & Authorization
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Логування необроблених винятків у AuditLog (після авторизації, щоб мати юзера в контексті)
+app.UseMiddleware<CalorieTracker.Server.Middleware.ErrorLoggingMiddleware>();
 
 app.MapControllers();
 

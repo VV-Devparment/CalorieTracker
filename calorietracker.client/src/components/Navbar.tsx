@@ -25,7 +25,7 @@ const Navbar = () => {
                     {/* Logo */}
                     <div className="flex items-center">
                         <Link to="/dashboard" className="flex items-center space-x-2">
-                            <span className="text-2xl">🍎</span>
+                            <img src="/logo.png" alt="CalorieTracker" className="w-8 h-8 object-contain" />
                             <span className="text-xl font-bold text-gray-900">
                                 CalorieTracker
                             </span>

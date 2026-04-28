@@ -59,7 +59,7 @@ const Login = () => {
             <div style={{ maxWidth: '400px', width: '100%' }}>
                 {/* Header */}
                 <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-                    <div style={{ fontSize: '48px', marginBottom: '24px' }}>🍎</div>
+                    <img src="/logo.png" alt="CalorieTracker" style={{ width: '64px', height: '64px', objectFit: 'contain', marginBottom: '24px', display: 'inline-block' }} />
                     <h2 style={{ fontSize: '32px', fontWeight: 'bold', color: '#1f2937', marginBottom: '8px' }}>
                         Увійти в CalorieTracker
                     </h2>

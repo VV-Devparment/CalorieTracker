@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { getCurrentUser, setCurrentUser } from '../utils/auth';
 import { usersApi } from '../services/api';
 import { notificationService } from '../services/notificationService';
@@ -14,21 +14,43 @@ interface User {
     gender?: string;
     activityLevel: number;
     dailyCalorieGoal?: number;
+    avatarUrl?: string | null;
     createdAt: string;
 }
+
+// Resize image to a square thumbnail and return JPEG Blob
+const resizeImageToBlob = (file: File, size = 256, quality = 0.85): Promise<Blob> =>
+    new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = size;
+                canvas.height = size;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) return reject(new Error('Canvas не підтримується'));
+                // Center-crop to square
+                const minSide = Math.min(img.width, img.height);
+                const sx = (img.width - minSide) / 2;
+                const sy = (img.height - minSide) / 2;
+                ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, size, size);
+                canvas.toBlob(
+                    blob => blob ? resolve(blob) : reject(new Error('Не вдалося створити blob')),
+                    'image/jpeg',
+                    quality
+                );
+            };
+            img.onerror = () => reject(new Error('Не вдалося прочитати зображення'));
+            img.src = reader.result as string;
+        };
+        reader.onerror = () => reject(new Error('Не вдалося прочитати файл'));
+        reader.readAsDataURL(file);
+    });
 
 interface WeightRecord {
     date: string;
     weight: number;
-}
-
-interface UserStats {
-    averageCalories: number;
-    averageProtein: number;
-    averageFats: number;
-    averageCarbs: number;
-    totalMeals: number;
-    daysWithData: number;
 }
 
 const Profile = () => {
@@ -36,9 +58,10 @@ const Profile = () => {
     const [editing, setEditing] = useState(false);
     const [loading, setLoading] = useState(false);
     const [weightHistory, setWeightHistory] = useState<WeightRecord[]>([]);
-    const [userStats, setUserStats] = useState<UserStats | null>(null);
     const [newWeight, setNewWeight] = useState('');
     const [activeTab, setActiveTab] = useState('profile');
+    const [avatarUploading, setAvatarUploading] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const [formData, setFormData] = useState({
         name: user?.name || '',
@@ -50,18 +73,8 @@ const Profile = () => {
     });
 
     useEffect(() => {
-        loadUserStats();
         loadWeightHistory();
     }, []);
-
-    const loadUserStats = async () => {
-        try {
-            const response = await usersApi.getStatistics(30);
-            setUserStats(response.data.summary);
-        } catch (error) {
-            console.error('Error loading stats:', error);
-        }
-    };
 
     const loadWeightHistory = async () => {
         try {
@@ -121,6 +134,47 @@ const Profile = () => {
         }
     };
 
+    const handleAvatarPick = () => fileInputRef.current?.click();
+
+    const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        e.target.value = ''; // allow re-selecting the same file
+        if (!file) return;
+        if (!file.type.startsWith('image/')) {
+            alert('Оберіть файл зображення');
+            return;
+        }
+        try {
+            setAvatarUploading(true);
+            const blob = await resizeImageToBlob(file);
+            const response = await usersApi.updateAvatar(blob);
+            const updated = { ...(user as User), avatarUrl: response.data.avatarUrl };
+            setUser(updated);
+            setCurrentUser(updated);
+        } catch (err: any) {
+            console.error('Avatar upload failed:', err);
+            alert('Не вдалося завантажити аватар: ' + (err?.response?.data?.message || err?.message || 'Невідома помилка'));
+        } finally {
+            setAvatarUploading(false);
+        }
+    };
+
+    const handleAvatarRemove = async () => {
+        if (!confirm('Видалити аватар?')) return;
+        try {
+            setAvatarUploading(true);
+            await usersApi.deleteAvatar();
+            const updated = { ...(user as User), avatarUrl: null };
+            setUser(updated);
+            setCurrentUser(updated);
+        } catch (err: any) {
+            console.error('Avatar delete failed:', err);
+            alert('Не вдалося видалити аватар');
+        } finally {
+            setAvatarUploading(false);
+        }
+    };
+
     const handleAddWeight = async () => {
         if (!newWeight || isNaN(Number(newWeight))) {
             alert('Введіть коректну вагу');
@@ -146,7 +200,6 @@ const Profile = () => {
 
             setNewWeight('');
             loadWeightHistory();
-            loadUserStats();
             alert('Вага успішно записана!');
         } catch (error: any) {
             console.error('Error adding weight:', error);
@@ -186,7 +239,6 @@ const Profile = () => {
 
     const tabs = [
         { id: 'profile', label: 'Профіль', icon: 'profile' },
-        { id: 'stats', label: 'Статистика', icon: 'chart' },
         { id: 'weight', label: 'Вага', icon: 'weight' }
     ];
 
@@ -205,8 +257,54 @@ const Profile = () => {
                             <h1 className="text-2xl font-bold text-gray-900">Профіль користувача</h1>
                             <p className="text-gray-600 mt-1">Керуйте своїми даними та налаштуваннями</p>
                         </div>
-                        <div className="flex justify-center">
-                            <Icon name="user-profile" size={64} color="blue" />
+                        <div className="flex flex-col items-center space-y-2">
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={handleAvatarChange}
+                            />
+                            <button
+                                type="button"
+                                onClick={handleAvatarPick}
+                                disabled={avatarUploading}
+                                className="relative group rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                                title={user?.avatarUrl ? 'Змінити аватар' : 'Додати аватар'}
+                            >
+                                {user?.avatarUrl ? (
+                                    <img
+                                        src={user.avatarUrl}
+                                        alt="Аватар"
+                                        className="w-16 h-16 rounded-full object-cover border-2 border-blue-200"
+                                    />
+                                ) : (
+                                    <div className="w-16 h-16 rounded-full bg-blue-50 border-2 border-blue-200 flex items-center justify-center">
+                                        <Icon name="user-profile" size={48} color="blue" />
+                                    </div>
+                                )}
+                                <span className="absolute inset-0 rounded-full bg-black bg-opacity-0 group-hover:bg-opacity-30 flex items-center justify-center text-white text-xs opacity-0 group-hover:opacity-100 transition">
+                                    {avatarUploading ? '...' : 'Змінити'}
+                                </span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleAvatarPick}
+                                disabled={avatarUploading}
+                                className="text-xs font-medium text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                            >
+                                Змінити аватар
+                            </button>
+                            {user?.avatarUrl && (
+                                <button
+                                    type="button"
+                                    onClick={handleAvatarRemove}
+                                    disabled={avatarUploading}
+                                    className="text-xs text-red-600 hover:text-red-800 disabled:opacity-50"
+                                >
+                                    Видалити
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -248,10 +346,10 @@ const Profile = () => {
                                                 <span>Редагувати</span>
                                             </button>
                                         ) : (
-                                            <div className="space-x-2">
+                                            <div className="flex items-center gap-4">
                                                 <button
                                                     onClick={() => setEditing(false)}
-                                                    className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors flex items-center space-x-2"
+                                                    className="w-36 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors flex items-center justify-center space-x-2"
                                                 >
                                                     <Icon name="close" size={16} color="gray" />
                                                     <span>Скасувати</span>
@@ -259,7 +357,7 @@ const Profile = () => {
                                                 <button
                                                     onClick={handleSave}
                                                     disabled={loading}
-                                                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center space-x-2"
+                                                    className="w-36 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center justify-center space-x-2"
                                                 >
                                                     <Icon name="save" size={16} color="white" />
                                                     <span>{loading ? 'Збереження...' : 'Зберегти'}</span>
@@ -406,96 +504,6 @@ const Profile = () => {
                                                 <Icon name="weight" size={48} color="blue" />
                                             </div>
                                         </div>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {/* Stats Tab */}
-                        {activeTab === 'stats' && (
-                            <div className="space-y-6">
-                                <h3 className="text-lg font-semibold text-gray-900">Статистика за останні 30 днів</h3>
-
-                                {userStats ? (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                        <div className="bg-blue-50 p-6 rounded-lg">
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <p className="text-sm text-blue-600 font-medium">Середні калорії</p>
-                                                    <p className="text-2xl font-bold text-blue-900">
-                                                        {Math.round(userStats.averageCalories)}
-                                                    </p>
-                                                </div>
-                                                <Icon name="calories" size={32} color="blue" />
-                                            </div>
-                                        </div>
-
-                                        <div className="bg-green-50 p-6 rounded-lg">
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <p className="text-sm text-green-600 font-medium">Середні білки</p>
-                                                    <p className="text-2xl font-bold text-green-900">
-                                                        {Math.round(userStats.averageProtein)}г
-                                                    </p>
-                                                </div>
-                                                <Icon name="protein" size={32} color="green" />
-                                            </div>
-                                        </div>
-
-                                        <div className="bg-yellow-50 p-6 rounded-lg">
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <p className="text-sm text-yellow-600 font-medium">Всього прийомів</p>
-                                                    <p className="text-2xl font-bold text-yellow-900">
-                                                        {userStats.totalMeals}
-                                                    </p>
-                                                </div>
-                                                <Icon name="plate" size={32} color="orange" />
-                                            </div>
-                                        </div>
-
-                                        <div className="bg-purple-50 p-6 rounded-lg">
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <p className="text-sm text-purple-600 font-medium">Днів з даними</p>
-                                                    <p className="text-2xl font-bold text-purple-900">
-                                                        {userStats.daysWithData}
-                                                    </p>
-                                                </div>
-                                                <Icon name="calendar" size={32} color="purple" />
-                                            </div>
-                                        </div>
-
-                                        <div className="bg-orange-50 p-6 rounded-lg">
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <p className="text-sm text-orange-600 font-medium">Середні жири</p>
-                                                    <p className="text-2xl font-bold text-orange-900">
-                                                        {Math.round(userStats.averageFats)}г
-                                                    </p>
-                                                </div>
-                                                <Icon name="fats" size={32} color="orange" />
-                                            </div>
-                                        </div>
-
-                                        <div className="bg-red-50 p-6 rounded-lg">
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <p className="text-sm text-red-600 font-medium">Середні вуглеводи</p>
-                                                    <p className="text-2xl font-bold text-red-900">
-                                                        {Math.round(userStats.averageCarbs)}г
-                                                    </p>
-                                                </div>
-                                                <Icon name="carbs" size={32} color="red" />
-                                            </div>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="text-center py-8 text-gray-500">
-                                        <div className="mb-3 flex justify-center">
-                                            <Icon name="chart" size={64} color="gray" />
-                                        </div>
-                                        <p>Статистика буде доступна після додавання прийомів їжі</p>
                                     </div>
                                 )}
                             </div>

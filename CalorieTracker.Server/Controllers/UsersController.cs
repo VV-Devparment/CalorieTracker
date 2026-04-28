@@ -60,7 +60,9 @@ namespace CalorieTracker.Server.Controllers
                     Gender = user.Gender,
                     ActivityLevel = user.ActivityLevel,
                     DailyCalorieGoal = dailyCalorieGoal,
-                    CreatedAt = user.CreatedAt
+                    AvatarUrl = BuildAvatarUrl(user),
+                    CreatedAt = user.CreatedAt,
+                    Role = user.Role,
                 };
 
                 return Ok(profileDto);
@@ -128,7 +130,9 @@ namespace CalorieTracker.Server.Controllers
                     Gender = user.Gender,
                     ActivityLevel = user.ActivityLevel,
                     DailyCalorieGoal = dailyCalorieGoal,
-                    CreatedAt = user.CreatedAt
+                    AvatarUrl = BuildAvatarUrl(user),
+                    CreatedAt = user.CreatedAt,
+                    Role = user.Role,
                 };
 
                 return Ok(profileDto);
@@ -137,6 +141,88 @@ namespace CalorieTracker.Server.Controllers
             {
                 return StatusCode(500, new { message = "Помилка при оновленні профілю", error = ex.Message });
             }
+        }
+
+        [HttpPut("avatar")]
+        [RequestSizeLimit(5_000_000)] // 5 MB
+        public async Task<ActionResult<AvatarResponseDto>> UpdateAvatar(IFormFile file)
+        {
+            try
+            {
+                var userId = int.Parse(User.FindFirst("userId")?.Value ?? "0");
+                var user = await _context.Users.FindAsync(userId);
+                if (user == null) return NotFound(new { message = "Користувача не знайдено" });
+
+                if (file == null || file.Length == 0)
+                    return BadRequest(new { message = "Файл не передано" });
+
+                if (file.Length > 2_000_000)
+                    return BadRequest(new { message = "Зображення завелике. Максимум 2 МБ" });
+
+                var contentType = file.ContentType?.ToLowerInvariant() ?? "";
+                if (!contentType.StartsWith("image/"))
+                    return BadRequest(new { message = "Очікується файл зображення" });
+
+                using var ms = new MemoryStream();
+                await file.CopyToAsync(ms);
+
+                // Overwriting in-place — old avatar bytes are replaced (effectively deleted)
+                user.AvatarData = ms.ToArray();
+                user.AvatarContentType = contentType;
+                user.AvatarUpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+
+                return Ok(new AvatarResponseDto { AvatarUrl = BuildAvatarUrl(user) });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Помилка при оновленні аватара", error = ex.Message });
+            }
+        }
+
+        [HttpDelete("avatar")]
+        public async Task<ActionResult<AvatarResponseDto>> DeleteAvatar()
+        {
+            try
+            {
+                var userId = int.Parse(User.FindFirst("userId")?.Value ?? "0");
+                var user = await _context.Users.FindAsync(userId);
+                if (user == null) return NotFound(new { message = "Користувача не знайдено" });
+
+                user.AvatarData = null;
+                user.AvatarContentType = null;
+                user.AvatarUpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+                return Ok(new AvatarResponseDto { AvatarUrl = null });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Помилка при видаленні аватара", error = ex.Message });
+            }
+        }
+
+        [HttpGet("{id:int}/avatar")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetAvatar(int id)
+        {
+            var user = await _context.Users
+                .AsNoTracking()
+                .Where(u => u.Id == id)
+                .Select(u => new { u.AvatarData, u.AvatarContentType })
+                .FirstOrDefaultAsync();
+
+            if (user?.AvatarData == null || user.AvatarData.Length == 0)
+                return NotFound();
+
+            return File(user.AvatarData, user.AvatarContentType ?? "application/octet-stream");
+        }
+
+        private string? BuildAvatarUrl(User user)
+        {
+            if (user.AvatarData == null || user.AvatarData.Length == 0) return null;
+            var version = user.AvatarUpdatedAt?.Ticks ?? 0;
+            var request = HttpContext.Request;
+            return $"{request.Scheme}://{request.Host}/api/users/{user.Id}/avatar?v={version}";
         }
 
         [HttpPost("weight")]

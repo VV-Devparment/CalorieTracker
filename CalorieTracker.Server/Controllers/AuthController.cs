@@ -47,6 +47,7 @@ namespace CalorieTracker.Server.Controllers
                     // Height is NOT stored in Users — it goes to the initial WeightRecord (3NF)
                     Gender = dto.Gender,
                     ActivityLevel = dto.ActivityLevel,
+                    Role = "User", // апгрейд до Admin тільки через SQL/Supabase
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
                 };
@@ -114,7 +115,9 @@ namespace CalorieTracker.Server.Controllers
                         Gender = user.Gender,
                         ActivityLevel = user.ActivityLevel,
                         DailyCalorieGoal = dailyCalorieGoal,
-                        CreatedAt = user.CreatedAt
+                        AvatarUrl = BuildAvatarUrl(user),
+                        CreatedAt = user.CreatedAt,
+                        Role = user.Role,
                     }
                 };
 
@@ -146,6 +149,16 @@ namespace CalorieTracker.Server.Controllers
                 if (!_authService.VerifyPassword(dto.Password, user.PasswordHash))
                 {
                     return BadRequest(new { message = "Невірний email або пароль" });
+                }
+
+                // Заблоковані юзери не можуть логінитись. Існуючі сесії живуть до expire (24 год) —
+                // hard-revoke потребував би refresh-token або token blacklist (поза скоупом).
+                if (user.IsBlocked)
+                {
+                    var reason = string.IsNullOrWhiteSpace(user.BlockedReason)
+                        ? "Ваш акаунт заблоковано адміністратором."
+                        : $"Ваш акаунт заблоковано: {user.BlockedReason}";
+                    return StatusCode(403, new { message = reason });
                 }
 
                 // Генеруємо JWT токен
@@ -182,7 +195,9 @@ namespace CalorieTracker.Server.Controllers
                         Gender = user.Gender,
                         ActivityLevel = user.ActivityLevel,
                         DailyCalorieGoal = dailyCalorieGoal,
-                        CreatedAt = user.CreatedAt
+                        AvatarUrl = BuildAvatarUrl(user),
+                        CreatedAt = user.CreatedAt,
+                        Role = user.Role,
                     }
                 };
 
@@ -192,6 +207,14 @@ namespace CalorieTracker.Server.Controllers
             {
                 return StatusCode(500, new { message = "Помилка при авторизації", error = ex.Message });
             }
+        }
+
+        private string? BuildAvatarUrl(User user)
+        {
+            if (user.AvatarData == null || user.AvatarData.Length == 0) return null;
+            var version = user.AvatarUpdatedAt?.Ticks ?? 0;
+            var request = HttpContext.Request;
+            return $"{request.Scheme}://{request.Host}/api/users/{user.Id}/avatar?v={version}";
         }
 
         private static int? ComputeAge(DateOnly? dateOfBirth)

@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { isAuthenticated } from './utils/auth';
+import { isAuthenticated, isAdmin } from './utils/auth';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
@@ -7,14 +7,19 @@ import Foods from './pages/Foods';
 import Profile from './pages/Profile';
 import Statistics from './pages/Statistics';
 import Achievements from './pages/Achievements';
+import Admin from './pages/Admin';
 import TopHeader from './components/TopHeader';
 import MobileBottomNavbar from './components/MobileBottomNavbar';
 import './App.css';
 
-// ... ����� ���� App.tsx
-
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     return isAuthenticated() ? <>{children}</> : <Navigate to="/login" />;
+};
+
+const AdminRoute = ({ children }: { children: React.ReactNode }) => {
+    if (!isAuthenticated()) return <Navigate to="/login" />;
+    if (!isAdmin()) return <Navigate to="/dashboard" />;
+    return <>{children}</>;
 };
 
 const PublicRoute = ({ children }: { children: React.ReactNode }) => {
@@ -78,6 +83,17 @@ function App() {
                                 <Achievements />
                                 <MobileBottomNavbar />
                             </ProtectedRoute>
+                        }
+                    />
+
+                    <Route
+                        path="/admin"
+                        element={
+                            <AdminRoute>
+                                <TopHeader />
+                                <Admin />
+                                <MobileBottomNavbar />
+                            </AdminRoute>
                         }
                     />
 

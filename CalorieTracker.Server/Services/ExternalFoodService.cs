@@ -1,372 +1,466 @@
+using System.Globalization;
+using System.Net;
+using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Microsoft.Extensions.Caching.Memory;
 using CalorieTracker.Server.DTOs;
 
 namespace CalorieTracker.Server.Services
 {
+    /// <summary>
+    /// Інтеграція з FatSecret Platform API (REST OAuth 2.0) — Premier scope.
+    ///
+    /// Auth: client_credentials → Bearer token (TTL 24 год, кешуємо у пам'яті).
+    /// Scope: "premier barcode" — premier розблоковує foods.search.v3 (region/language)
+    ///   та структуровані servings; barcode — окремий scope для food.find_id_for_barcode.
+    ///
+    /// Search: foods.search.v3 з region=UA, language=uk → українські локальні бренди
+    ///   (Молокія, Чумак, Рошен тощо), яких немає у глобальному foods.search.
+    ///   Якщо UA нічого не дає — фолбек на International (region не передаємо).
+    ///   Відповідь має структурований servings[] масив, тому регекс-парсер
+    ///   `food_description` більше не потрібен.
+    ///
+    /// Barcode: food.find_id_for_barcode (потребує GTIN-13, паддимо нулями зліва) →
+    ///   food.get.v4 для повних даних.
+    ///
+    /// Усі помилки тут лише логуються. Викликач (контролер) очікує безпечні відповіді
+    /// (порожній список / null), щоб одна провалена відповідь FatSecret не валила весь UX.
+    /// </summary>
     public class ExternalFoodService
     {
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IMemoryCache _cache;
         private readonly ILogger<ExternalFoodService> _logger;
+        private readonly string _clientId;
+        private readonly string _clientSecret;
 
-        private static readonly JsonSerializerOptions JsonOpts = new()
-        {
-            PropertyNameCaseInsensitive = true
-        };
+        private const string AuthClientName = "FatSecretAuth";
+        private const string ApiClientName = "FatSecretApi";
+        private const string TokenCacheKey = "fatsecret:token";
+        private const string SearchCachePrefix = "fatsecret:search:";
+        private const string BarcodeCachePrefix = "fatsecret:barcode:";
+        private const string OAuthScope = "premier barcode";
 
-        private static readonly TimeSpan PerAttemptTimeout = TimeSpan.FromSeconds(12);
-        private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(500);
-        private const int MaxAttempts = 2;
-
-        private static readonly HashSet<string> BlockedCountries = new()
-        {
-            "en:russia", "en:belarus"
-        };
+        private static readonly TimeSpan SearchCacheTtl = TimeSpan.FromMinutes(10);
+        private static readonly TimeSpan BarcodeCacheTtl = TimeSpan.FromHours(1);
+        private static readonly TimeSpan TokenSafetyMargin = TimeSpan.FromMinutes(5);
 
         public ExternalFoodService(
             IHttpClientFactory httpClientFactory,
             IMemoryCache cache,
+            IConfiguration configuration,
             ILogger<ExternalFoodService> logger)
         {
             _httpClientFactory = httpClientFactory;
             _cache = cache;
             _logger = logger;
+
+            _clientId = (configuration["FatSecret:ClientId"] ?? "").Trim();
+            _clientSecret = (configuration["FatSecret:ClientSecret"] ?? "").Trim();
+
+            if (string.IsNullOrWhiteSpace(_clientId) || string.IsNullOrWhiteSpace(_clientSecret))
+            {
+                _logger.LogWarning(
+                    "FatSecret credentials are not configured. " +
+                    "Set FatSecret:ClientId and FatSecret:ClientSecret in appsettings or env vars.");
+            }
         }
 
+        // ───── Public API ─────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Пошук за назвою через foods.search.v3.
+        ///
+        /// Тариф: Premier Free → US data set. Параметр region=UA не дає результатів
+        /// (UA-маркет потребує платної Premier-підписки), тому ми його не передаємо.
+        /// Лишаємо тільки language=uk — це додає українські підписи для тих
+        /// generic-продуктів, де FatSecret має переклади (наприклад «Milk» → «Молоко»).
+        ///
+        /// TODO: коли акаунт буде апгрейднуто до paid Premier з UA-доступом,
+        /// додати другий виклик з region="UA" перед цим (UA → fallback на International).
+        /// </summary>
         public async Task<List<ExternalFoodDto>> SearchByNameAsync(string query, string source = "ukraine")
         {
-            return await SearchOffAsync(query);
+            var trimmed = query?.Trim() ?? "";
+            if (trimmed.Length == 0) return new List<ExternalFoodDto>();
+            if (string.IsNullOrEmpty(_clientId) || string.IsNullOrEmpty(_clientSecret))
+                return new List<ExternalFoodDto>();
+
+            var cacheKey = SearchCachePrefix + trimmed.ToLowerInvariant();
+            if (_cache.TryGetValue(cacheKey, out List<ExternalFoodDto>? cached) && cached != null)
+                return cached;
+
+            try
+            {
+                var results = await SearchV3Async(trimmed, region: null, language: "uk");
+                if (results.Count > 0)
+                    _cache.Set(cacheKey, results, SearchCacheTtl);
+                return results;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    "FatSecret search failed for '{Query}': {Type} {Message}",
+                    trimmed, ex.GetType().Name, ex.Message);
+                return new List<ExternalFoodDto>();
+            }
         }
 
         public async Task<ExternalFoodDto?> SearchByBarcodeAsync(string barcode)
         {
+            var sanitized = SanitizeBarcode(barcode);
+            if (sanitized == null) return null;
+            if (string.IsNullOrEmpty(_clientId) || string.IsNullOrEmpty(_clientSecret)) return null;
+
+            var cacheKey = BarcodeCachePrefix + sanitized;
+            if (_cache.TryGetValue(cacheKey, out ExternalFoodDto? cached) && cached != null)
+                return cached;
+
             try
             {
-                var client = _httpClientFactory.CreateClient("OpenFoodFacts");
-                var url = $"api/v2/product/{Uri.EscapeDataString(barcode)}.json" +
-                          $"?lc=uk&fields=product_name,product_name_uk,product_name_en,brands,nutriments,code,lang";
+                // GTIN-13 — паддимо нулями зліва (UPC-A 12 → 0XXXXXXXXXXXX).
+                var gtin13 = sanitized.PadLeft(13, '0');
 
-                using var cts = new CancellationTokenSource(PerAttemptTimeout);
-                var response = await client.GetAsync(url, cts.Token);
-                if (!response.IsSuccessStatusCode) return null;
+                var idJson = await CallApiAsync(new Dictionary<string, string>
+                {
+                    ["method"] = "food.find_id_for_barcode",
+                    ["format"] = "json",
+                    ["barcode"] = gtin13,
+                });
 
-                var content = await response.Content.ReadAsStringAsync(cts.Token);
-                var data = JsonSerializer.Deserialize<OffBarcodeResponse>(content, JsonOpts);
+                var foodId = ExtractBarcodeFoodId(idJson);
+                if (foodId == null || foodId == "0") return null;
 
-                if (data?.Status != 1 || data.Product?.Nutriments == null) return null;
+                var foodJson = await CallApiAsync(new Dictionary<string, string>
+                {
+                    ["method"] = "food.get.v4",
+                    ["format"] = "json",
+                    ["food_id"] = foodId,
+                });
 
-                var p = data.Product;
-                p.Code = barcode;
-                return TryMapToDto(p, preferUkrainian: true);
+                var dto = ParseFoodGetV4(foodJson);
+                if (dto != null)
+                {
+                    dto.Barcode = sanitized;
+                    _cache.Set(cacheKey, dto, BarcodeCacheTtl);
+                }
+                return dto;
             }
             catch (Exception ex)
             {
-                _logger.LogWarning("OFF barcode lookup failed for {Barcode}: {ExType} {Message}",
-                    barcode, ex.GetType().Name, ex.Message);
+                _logger.LogWarning(
+                    "FatSecret barcode lookup failed for {Barcode}: {Type} {Message}",
+                    sanitized, ex.GetType().Name, ex.Message);
                 return null;
             }
         }
 
-        private async Task<List<ExternalFoodDto>> SearchOffAsync(string query)
+        // ───── Search v3 ──────────────────────────────────────────────────────
+
+        private async Task<List<ExternalFoodDto>> SearchV3Async(string query, string? region, string? language)
         {
-            var trimmed = query.Trim();
-            if (trimmed.Length == 0) return new List<ExternalFoodDto>();
+            var p = new Dictionary<string, string>
+            {
+                ["method"] = "foods.search.v3",
+                ["format"] = "json",
+                ["search_expression"] = query,
+                ["max_results"] = "20",
+                // include_sub_categories додає category info; include_food_images зайве для нашого UI
+                ["include_sub_categories"] = "true",
+            };
+            if (!string.IsNullOrEmpty(region)) p["region"] = region!;
+            if (!string.IsNullOrEmpty(language)) p["language"] = language!;
 
-            var isCyrillic = ContainsCyrillic(trimmed);
-            var cacheKey = $"off:v3:{(isCyrillic ? "uk" : "en")}:{trimmed.ToLowerInvariant()}";
+            var json = await CallApiAsync(p);
+            return ParseFoodsSearchV3(json);
+        }
 
-            if (_cache.TryGetValue(cacheKey, out List<ExternalFoodDto>? cached))
+        // ───── HTTP plumbing ──────────────────────────────────────────────────
+
+        /// <summary>
+        /// GET /rest/server.api з Bearer-токеном.
+        /// На 401 один раз інвалідуємо токен у кеші й ретраїмо (типово для ротації).
+        /// </summary>
+        private async Task<string> CallApiAsync(Dictionary<string, string> queryParams)
+        {
+            const int maxAttempts = 2;
+
+            for (int attempt = 1; attempt <= maxAttempts; attempt++)
+            {
+                var token = await GetAccessTokenAsync();
+                var url = "rest/server.api?" + BuildQueryString(queryParams);
+
+                using var request = new HttpRequestMessage(HttpMethod.Get, url);
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+                var client = _httpClientFactory.CreateClient(ApiClientName);
+                using var response = await client.SendAsync(request);
+
+                if (response.StatusCode == HttpStatusCode.Unauthorized && attempt < maxAttempts)
+                {
+                    _logger.LogInformation("FatSecret 401 — invalidating token cache and retrying");
+                    _cache.Remove(TokenCacheKey);
+                    continue;
+                }
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var body = await SafeReadBodyAsync(response);
+                    _logger.LogWarning(
+                        "FatSecret API HTTP {Status} for method '{Method}': {Body}",
+                        (int)response.StatusCode,
+                        queryParams.GetValueOrDefault("method", "?"),
+                        body);
+                    response.EnsureSuccessStatusCode();
+                }
+
+                return await response.Content.ReadAsStringAsync();
+            }
+
+            throw new HttpRequestException("FatSecret API: retries exhausted");
+        }
+
+        private async Task<string> GetAccessTokenAsync()
+        {
+            if (_cache.TryGetValue(TokenCacheKey, out string? cached) && !string.IsNullOrEmpty(cached))
                 return cached!;
 
-            // Пробуємо обидва API паралельно — це дає кращу latency + надійність.
-            // Якщо один API впаде/таймаутне, результати з іншого все одно прийдуть.
-            var legacyTask = TrySearchLegacyAsync(trimmed, isCyrillic);
-            var newTask = TrySearchNewAsync(trimmed, isCyrillic);
+            var basic = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{_clientId}:{_clientSecret}"));
 
-            await Task.WhenAll(legacyTask, newTask);
-
-            var legacy = legacyTask.Result;
-            var modern = newTask.Result;
-
-            // Обидва null = обидва API впали з помилкою (не "порожньо", а саме помилка).
-            if (legacy == null && modern == null)
+            using var request = new HttpRequestMessage(HttpMethod.Post, "connect/token")
             {
-                _logger.LogError("Both OFF APIs failed for query '{Query}'", trimmed);
-                throw new HttpRequestException("Open Food Facts наразі недоступний. Спробуйте через кілька секунд.");
+                Content = new FormUrlEncodedContent(new[]
+                {
+                    new KeyValuePair<string, string>("grant_type", "client_credentials"),
+                    new KeyValuePair<string, string>("scope", OAuthScope),
+                })
+            };
+            request.Headers.Authorization = new AuthenticationHeaderValue("Basic", basic);
+
+            var client = _httpClientFactory.CreateClient(AuthClientName);
+            using var response = await client.SendAsync(request);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await SafeReadBodyAsync(response);
+                _logger.LogError(
+                    "FatSecret OAuth token request failed: HTTP {Status}. Scope='{Scope}'. Body: {Body}",
+                    (int)response.StatusCode, OAuthScope, body);
+
+                // 403 = майже завжди IP не у whitelist у FatSecret dashboard.
+                // 400 invalid_scope = акаунт ще не Premier (scope недоступний).
+                var hint = response.StatusCode == HttpStatusCode.Forbidden
+                    ? " (HTTP 403 — імовірно, IP сервера не доданий у whitelist у FatSecret dashboard)"
+                    : "";
+                throw new HttpRequestException(
+                    $"FatSecret OAuth token request failed: HTTP {(int)response.StatusCode}{hint}");
             }
 
-            // Зливаємо результати, дедуплікуючи за barcode
-            var merged = new List<OffProduct>();
-            var seenCodes = new HashSet<string>();
-            foreach (var p in (legacy ?? new List<OffProduct>()).Concat(modern ?? new List<OffProduct>()))
+            var json = await response.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            var accessToken = root.GetProperty("access_token").GetString();
+            if (string.IsNullOrWhiteSpace(accessToken))
+                throw new InvalidOperationException("FatSecret returned empty access_token");
+
+            var expiresIn = root.TryGetProperty("expires_in", out var expEl)
+                ? expEl.GetInt32() : 86400;
+
+            // Кеш зберігаємо з запасом, щоб не використати майже-протермінований токен.
+            var ttl = TimeSpan.FromSeconds(expiresIn) - TokenSafetyMargin;
+            if (ttl < TimeSpan.FromMinutes(1)) ttl = TimeSpan.FromMinutes(1);
+            _cache.Set(TokenCacheKey, accessToken, ttl);
+
+            return accessToken!;
+        }
+
+        private static string BuildQueryString(Dictionary<string, string> kv) =>
+            string.Join("&", kv.Select(p =>
+                $"{Uri.EscapeDataString(p.Key)}={Uri.EscapeDataString(p.Value)}"));
+
+        private static async Task<string> SafeReadBodyAsync(HttpResponseMessage response)
+        {
+            try { return await response.Content.ReadAsStringAsync(); }
+            catch { return ""; }
+        }
+
+        // ───── Response parsing ───────────────────────────────────────────────
+
+        /// <summary>
+        /// Парсить foods.search.v3 → { foods_search: { results: { food: [...] } } }.
+        /// Кожен food має servings.serving[] зі структурованими полями замість опису-рядка.
+        /// </summary>
+        private List<ExternalFoodDto> ParseFoodsSearchV3(string json)
+        {
+            var result = new List<ExternalFoodDto>();
+            JsonDocument doc;
+            try { doc = JsonDocument.Parse(json); }
+            catch (JsonException ex)
             {
-                var key = !string.IsNullOrWhiteSpace(p.Code) ? p.Code! : Guid.NewGuid().ToString();
-                if (seenCodes.Add(key)) merged.Add(p);
+                _logger.LogWarning("FatSecret returned non-JSON body: {Message}", ex.Message);
+                return result;
             }
 
-            var mapped = RankAndMap(merged, trimmed, isCyrillic);
-
-            if (mapped.Count > 0)
-                _cache.Set(cacheKey, mapped, TimeSpan.FromMinutes(10));
-
-            return mapped;
-        }
-
-        /// <summary>
-        /// Legacy API: world.openfoodfacts.org/cgi/search.pl
-        /// Повертає null — API впав з помилкою. Повертає [] — результатів немає.
-        /// </summary>
-        private Task<List<OffProduct>?> TrySearchLegacyAsync(string query, bool isCyrillic)
-        {
-            var lc = isCyrillic ? "uk" : "en";
-            var cc = isCyrillic ? "ua" : "world";
-
-            var url = $"cgi/search.pl?action=process" +
-                      $"&search_terms={Uri.EscapeDataString(query)}" +
-                      $"&search_simple=1&json=1&page_size=30" +
-                      $"&lc={lc}&cc={cc}" +
-                      $"&fields=product_name,product_name_uk,product_name_en,product_name_ru," +
-                      $"brands,nutriments,code,countries_tags,lang";
-
-            return FetchWithRetryAsync<OffSearchResponse>(
-                clientName: "OpenFoodFacts",
-                apiName: "legacy",
-                query: query,
-                relativeUrl: url,
-                extractor: r => r?.Products);
-        }
-
-        /// <summary>
-        /// Modern Search-a-licious API: search.openfoodfacts.org
-        /// </summary>
-        private Task<List<OffProduct>?> TrySearchNewAsync(string query, bool isCyrillic)
-        {
-            var langs = isCyrillic ? "uk,en" : "en";
-
-            var url = $"search?q={Uri.EscapeDataString(query)}" +
-                      $"&page_size=30&langs={langs}" +
-                      $"&fields=product_name,product_name_uk,product_name_en,brands,nutriments,code,countries_tags,lang";
-
-            return FetchWithRetryAsync<OffNewSearchResponse>(
-                clientName: "OpenFoodFactsSearch",
-                apiName: "modern",
-                query: query,
-                relativeUrl: url,
-                extractor: r => r?.Hits);
-        }
-
-        /// <summary>
-        /// Виконує HTTP-запит з retry на транзієнтних помилках (таймаут, 5xx, мережеві виняти).
-        /// Не ретраїть 4xx (наш запит поганий) і не затримує зайвий раз на успіху.
-        /// </summary>
-        private async Task<List<OffProduct>?> FetchWithRetryAsync<TResponse>(
-            string clientName,
-            string apiName,
-            string query,
-            string relativeUrl,
-            Func<TResponse?, List<OffProduct>?> extractor)
-            where TResponse : class
-        {
-            for (int attempt = 1; attempt <= MaxAttempts; attempt++)
+            using (doc)
             {
-                try
+                var root = doc.RootElement;
+                if (TryReadError(root, out var errCode, out var errMsg))
                 {
-                    var client = _httpClientFactory.CreateClient(clientName);
-                    using var cts = new CancellationTokenSource(PerAttemptTimeout);
-
-                    var response = await client.GetAsync(relativeUrl, cts.Token);
-                    if (!response.IsSuccessStatusCode)
-                    {
-                        var status = (int)response.StatusCode;
-                        // 5xx and 429 — транзієнтні; 4xx (окрім 429) — постійні
-                        bool transient = status >= 500 || status == 429;
-                        _logger.LogWarning(
-                            "OFF {Api} HTTP {Status} for '{Query}' (attempt {Attempt}/{Max}, transient={Transient})",
-                            apiName, status, query, attempt, MaxAttempts, transient);
-
-                        if (transient && attempt < MaxAttempts)
-                        {
-                            await Task.Delay(RetryDelay);
-                            continue;
-                        }
-                        return null;
-                    }
-
-                    var content = await response.Content.ReadAsStringAsync(cts.Token);
-                    var data = JsonSerializer.Deserialize<TResponse>(content, JsonOpts);
-                    return extractor(data) ?? new List<OffProduct>();
+                    _logger.LogWarning("FatSecret foods.search.v3 error code={Code}: {Message}", errCode, errMsg);
+                    return result;
                 }
-                catch (Exception ex) when (attempt < MaxAttempts)
+
+                // v3 wrap: foods_search.results.food
+                if (!root.TryGetProperty("foods_search", out var fs)) return result;
+                if (!fs.TryGetProperty("results", out var results)) return result;
+                if (!results.TryGetProperty("food", out var foodEl)) return result;
+
+                EnumerateFoodArray(foodEl, f =>
                 {
-                    _logger.LogWarning(
-                        "OFF {Api} attempt {Attempt}/{Max} for '{Query}' threw {ExType}: {Message}. Retrying...",
-                        apiName, attempt, MaxAttempts, query, ex.GetType().Name, ex.Message);
-                    await Task.Delay(RetryDelay);
-                }
-                catch (Exception ex)
+                    var dto = ParseFoodWithServings(f);
+                    if (dto != null) result.Add(dto);
+                });
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Парсить food.get.v4 → { food: { ..., servings: { serving: [...] } } }.
+        /// </summary>
+        private ExternalFoodDto? ParseFoodGetV4(string json)
+        {
+            JsonDocument doc;
+            try { doc = JsonDocument.Parse(json); }
+            catch (JsonException ex)
+            {
+                _logger.LogWarning("FatSecret returned non-JSON body: {Message}", ex.Message);
+                return null;
+            }
+
+            using (doc)
+            {
+                var root = doc.RootElement;
+                if (TryReadError(root, out var errCode, out var errMsg))
                 {
-                    _logger.LogWarning(
-                        "OFF {Api} exhausted retries for '{Query}' ({ExType}: {Message})",
-                        apiName, query, ex.GetType().Name, ex.Message);
+                    _logger.LogWarning("FatSecret food.get.v4 error code={Code}: {Message}", errCode, errMsg);
                     return null;
                 }
+
+                if (!root.TryGetProperty("food", out var foodEl)) return null;
+                return ParseFoodWithServings(foodEl);
             }
-            return null;
         }
 
         /// <summary>
-        /// Фільтрує продукти за релевантністю та сортує найрелевантніші першими.
-        /// Це найважливіше виправлення — раніше OFF повертав продукти, де запит
-        /// матчився в ingredients/categories, а назва була зовсім іншою.
+        /// Спільний парсер для food-обʼєкта з v3/v4. Шукає 100g serving (або довільний грамовий
+        /// і нормалізує до 100g). Якщо грамових немає — повертає null.
         /// </summary>
-        private static List<ExternalFoodDto> RankAndMap(List<OffProduct> products, string query, bool preferUkrainian)
-        {
-            var queryTokens = Tokenize(query);
-            var scored = new List<(ExternalFoodDto dto, int score)>();
-
-            foreach (var p in products)
-            {
-                if (p.Nutriments == null) continue;
-                if (IsBlockedByCountry(p)) continue;
-
-                var displayName = GetBestName(p, preferUkrainian);
-                if (string.IsNullOrWhiteSpace(displayName)) continue;
-
-                // Перевірка релевантності: токени запиту мають зустрічатись
-                // хоча б в одному з мовних полів назви або в бренді.
-                // Інакше OFF повертає продукти, що матчились за інгредієнтами —
-                // а користувач шукав конкретну страву.
-                var relevance = ComputeRelevance(p, displayName, queryTokens);
-                if (relevance == 0) continue;
-
-                var dto = TryMapToDto(p, preferUkrainian);
-                if (dto == null) continue;
-
-                // Бонус: якщо запит укр. і у продукта є укр. назва — піднімаємо в ранзі
-                var score = relevance * 10;
-                if (preferUkrainian && !string.IsNullOrWhiteSpace(p.ProductNameUk))
-                    score += 5;
-
-                scored.Add((dto, score));
-            }
-
-            return scored
-                .OrderByDescending(x => x.score)
-                .Select(x => x.dto)
-                .Take(20)
-                .ToList();
-        }
-
-        private static HashSet<string> Tokenize(string query)
-        {
-            return query.ToLowerInvariant()
-                .Split(new[] { ' ', '\t', ',', '.', '-', '_', '/', '\\', '(', ')' },
-                       StringSplitOptions.RemoveEmptyEntries)
-                .Where(t => t.Length >= 2)
-                .ToHashSet();
-        }
-
-        private static int ComputeRelevance(OffProduct p, string chosenName, HashSet<string> queryTokens)
-        {
-            if (queryTokens.Count == 0) return 1;
-
-            // Перевіряємо запит проти ВСІХ мовних варіантів назви + бренду.
-            // Тоді українські токени знайдуться в product_name_uk, англійські — в product_name_en,
-            // а на дисплей ми все одно покажемо назву, що відповідає мові користувача.
-            var haystack = string.Join(" ", new[]
-            {
-                chosenName,
-                p.ProductName,
-                p.ProductNameUk,
-                p.ProductNameEn,
-                p.ProductNameRu,
-                p.Brands
-            }.Where(s => !string.IsNullOrWhiteSpace(s))).ToLowerInvariant();
-
-            int score = 0;
-            foreach (var token in queryTokens)
-            {
-                if (haystack.Contains(token)) score++;
-            }
-            return score;
-        }
-
-        private static bool IsBlockedByCountry(OffProduct p)
-        {
-            if (p.CountriesTags == null) return false;
-            return p.CountriesTags.Any(t => BlockedCountries.Contains(t.ToLowerInvariant()));
-        }
-
-        /// <summary>
-        /// Обирає найкращу назву для відображення користувачу.
-        /// UA-користувач: uk → en (без кирилиці) → default (якщо не рос.)
-        /// EN-користувач: en (без кирилиці) → default (без кирилиці)
-        /// </summary>
-        private static string? GetBestName(OffProduct p, bool preferUkrainian)
-        {
-            if (preferUkrainian)
-            {
-                if (IsReadableUkrainian(p.ProductNameUk)) return p.ProductNameUk;
-                if (IsReadableLatin(p.ProductNameEn)) return p.ProductNameEn;
-                if (IsReadableUkrainian(p.ProductName)) return p.ProductName;
-                if (IsReadableLatin(p.ProductName)) return p.ProductName;
-                return null;
-            }
-            else
-            {
-                if (IsReadableLatin(p.ProductNameEn)) return p.ProductNameEn;
-                if (IsReadableLatin(p.ProductName)) return p.ProductName;
-                return null;
-            }
-        }
-
-        /// <summary>Латинський текст без кирилиці (англ., франц., нім. тощо).</summary>
-        private static bool IsReadableLatin(string? text) =>
-            !string.IsNullOrWhiteSpace(text) && !ContainsCyrillic(text);
-
-        /// <summary>Український текст (відкидає суто російський).</summary>
-        private static bool IsReadableUkrainian(string? text)
-        {
-            if (string.IsNullOrWhiteSpace(text)) return false;
-            if (!ContainsCyrillic(text)) return false;
-
-            var hasRussianOnlyChars = text.Any(c => c is 'ы' or 'Ы' or 'э' or 'Э' or 'ъ' or 'Ъ' or 'ё' or 'Ё');
-            var hasUkrainianMarkers = text.Any(c => c is 'і' or 'І' or 'ї' or 'Ї' or 'є' or 'Є' or 'ґ' or 'Ґ');
-
-            // Якщо є рос. букви, але немає укр. маркерів — це російська.
-            if (hasRussianOnlyChars && !hasUkrainianMarkers) return false;
-            return true;
-        }
-
-        private static ExternalFoodDto? TryMapToDto(OffProduct p, bool preferUkrainian)
+        private ExternalFoodDto? ParseFoodWithServings(JsonElement food)
         {
             try
             {
-                var name = GetBestName(p, preferUkrainian);
-                if (string.IsNullOrWhiteSpace(name)) return null;
+                var foodId = GetString(food, "food_id");
+                var name = GetString(food, "food_name");
+                if (string.IsNullOrWhiteSpace(foodId) || string.IsNullOrWhiteSpace(name))
+                    return null;
 
-                static decimal Safe(double? v) =>
-                    (v == null || double.IsNaN(v.Value) || double.IsInfinity(v.Value))
-                        ? 0m
-                        : Math.Round((decimal)v.Value, 2);
+                if (!food.TryGetProperty("servings", out var servingsEl)) return null;
+                if (!servingsEl.TryGetProperty("serving", out var servingArr)) return null;
+
+                JsonElement? best = PickBestGramServing(servingArr);
+                if (best == null) return null;
+
+                var s = best.Value;
+                var grams = ParseDouble(GetString(s, "metric_serving_amount"));
+                var unit = (GetString(s, "metric_serving_unit") ?? "").ToLowerInvariant();
+                if (grams <= 0 || unit != "g") return null;
+
+                var scale = 100.0 / grams;
 
                 return new ExternalFoodDto
                 {
-                    ExternalId = p.Code ?? Guid.NewGuid().ToString(),
-                    Source = "OpenFoodFacts",
-                    Name = name,
-                    Brand = p.Brands,
-                    Barcode = p.Code,
-                    CaloriesPer100g = Safe(p.Nutriments!.GetKcal()),
-                    ProteinPer100g = Safe(p.Nutriments.Proteins100g),
-                    FatsPer100g = Safe(p.Nutriments.Fat100g),
-                    CarbsPer100g = Safe(p.Nutriments.Carbohydrates100g),
-                    FiberPer100g = Safe(p.Nutriments.Fiber100g),
-                    SugarPer100g = Safe(p.Nutriments.Sugars100g),
-                    SodiumPer100g = Safe((p.Nutriments.Sodium100g ?? 0) * 1000),
+                    ExternalId = foodId!,
+                    Source = "FatSecret",
+                    Name = name!,
+                    Brand = GetString(food, "brand_name"),
+                    Barcode = null,
+                    CaloriesPer100g = SafeDecimal(ParseDouble(GetString(s, "calories")) * scale),
+                    ProteinPer100g  = SafeDecimal(ParseDouble(GetString(s, "protein")) * scale),
+                    FatsPer100g     = SafeDecimal(ParseDouble(GetString(s, "fat")) * scale),
+                    CarbsPer100g    = SafeDecimal(ParseDouble(GetString(s, "carbohydrate")) * scale),
+                    FiberPer100g    = SafeDecimal(ParseDouble(GetString(s, "fiber")) * scale),
+                    SugarPer100g    = SafeDecimal(ParseDouble(GetString(s, "sugar")) * scale),
+                    SodiumPer100g   = SafeDecimal(ParseDouble(GetString(s, "sodium")) * scale),
+                    Category = GetString(food, "food_sub_categories") ?? GetString(food, "food_type"),
                 };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug("Skipping FatSecret food entry: {Message}", ex.Message);
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Пріоритет: точно 100g → інший grams (нормалізуємо). Інші unit
+        /// (oz, cup, tbsp...) пропускаємо — без food.get не маємо грамового еквіваленту.
+        /// </summary>
+        private static JsonElement? PickBestGramServing(JsonElement servingArr)
+        {
+            JsonElement? hundred = null;
+            JsonElement? anyGram = null;
+
+            void Visit(JsonElement s)
+            {
+                var unit = (GetString(s, "metric_serving_unit") ?? "").ToLowerInvariant();
+                if (unit != "g") return;
+
+                var grams = ParseDouble(GetString(s, "metric_serving_amount"));
+                if (grams <= 0) return;
+
+                if (Math.Abs(grams - 100.0) < 0.01)
+                {
+                    hundred ??= s;
+                }
+                else
+                {
+                    anyGram ??= s;
+                }
+            }
+
+            if (servingArr.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var s in servingArr.EnumerateArray())
+                {
+                    Visit(s);
+                    if (hundred != null) break;
+                }
+            }
+            else if (servingArr.ValueKind == JsonValueKind.Object)
+            {
+                Visit(servingArr);
+            }
+
+            return hundred ?? anyGram;
+        }
+
+        private static string? ExtractBarcodeFoodId(string json)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+                if (!root.TryGetProperty("food_id", out var idEl)) return null;
+
+                // Може бути { "food_id": { "value": "12345" } } або { "food_id": "12345" }.
+                if (idEl.ValueKind == JsonValueKind.Object && idEl.TryGetProperty("value", out var valEl))
+                    return valEl.GetString();
+                if (idEl.ValueKind == JsonValueKind.String)
+                    return idEl.GetString();
+                return null;
             }
             catch
             {
@@ -374,79 +468,60 @@ namespace CalorieTracker.Server.Services
             }
         }
 
-        private static bool ContainsCyrillic(string? text) =>
-            text != null && text.Any(c => c >= '\u0400' && c <= '\u04FF');
-
-        // ── Response models ──────────────────────────────────────────────
-
-        private class OffNewSearchResponse
+        // FatSecret квірк: масив з 1 елементом може приходити як обʼєкт, а не масив.
+        private static void EnumerateFoodArray(JsonElement foodEl, Action<JsonElement> visit)
         {
-            public List<OffProduct> Hits { get; set; } = new();
+            if (foodEl.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var f in foodEl.EnumerateArray()) visit(f);
+            }
+            else if (foodEl.ValueKind == JsonValueKind.Object)
+            {
+                visit(foodEl);
+            }
         }
 
-        private class OffSearchResponse
+        private static bool TryReadError(JsonElement root, out string code, out string? message)
         {
-            public List<OffProduct> Products { get; set; } = new();
+            code = "?";
+            message = null;
+            if (!root.TryGetProperty("error", out var err)) return false;
+            if (err.TryGetProperty("code", out var c)) code = c.ToString();
+            if (err.TryGetProperty("message", out var m)) message = m.GetString();
+            return true;
         }
 
-        private class OffBarcodeResponse
+        // ───── Helpers ────────────────────────────────────────────────────────
+
+        /// <summary>Лишаємо тільки цифри; повертаємо null, якщо лишилось менше 6 або більше 14 символів.</summary>
+        private static string? SanitizeBarcode(string? barcode)
         {
-            public int Status { get; set; }
-            public OffProduct? Product { get; set; }
+            if (string.IsNullOrWhiteSpace(barcode)) return null;
+            var digits = new string(barcode.Where(char.IsDigit).ToArray());
+            if (digits.Length < 6 || digits.Length > 14) return null;
+            return digits;
         }
 
-        private class OffProduct
+        // FatSecret часом повертає числові поля як рядки, часом як числа — обробляємо обидва.
+        private static string? GetString(JsonElement obj, string prop)
         {
-            [JsonPropertyName("product_name")]
-            public string? ProductName { get; set; }
-
-            [JsonPropertyName("product_name_uk")]
-            public string? ProductNameUk { get; set; }
-
-            [JsonPropertyName("product_name_en")]
-            public string? ProductNameEn { get; set; }
-
-            [JsonPropertyName("product_name_ru")]
-            public string? ProductNameRu { get; set; }
-
-            public string? Brands { get; set; }
-            public string? Code { get; set; }
-            public OffNutriments? Nutriments { get; set; }
-
-            [JsonPropertyName("countries_tags")]
-            public List<string>? CountriesTags { get; set; }
-
-            public string? Lang { get; set; }
+            if (!obj.TryGetProperty(prop, out var el)) return null;
+            return el.ValueKind switch
+            {
+                JsonValueKind.String => el.GetString(),
+                JsonValueKind.Number => el.GetRawText(),
+                _ => null,
+            };
         }
 
-        private class OffNutriments
+        private static double ParseDouble(string? s) =>
+            !string.IsNullOrWhiteSpace(s) &&
+            double.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out var d) ? d : 0;
+
+        private static decimal SafeDecimal(double v)
         {
-            [JsonPropertyName("energy-kcal_100g")]
-            public double? EnergyKcal100g { get; set; }
-
-            [JsonPropertyName("energy_100g")]
-            public double? EnergyKj100g { get; set; }
-
-            public double? GetKcal() =>
-                EnergyKcal100g ?? (EnergyKj100g.HasValue ? EnergyKj100g.Value / 4.184 : null);
-
-            [JsonPropertyName("proteins_100g")]
-            public double? Proteins100g { get; set; }
-
-            [JsonPropertyName("fat_100g")]
-            public double? Fat100g { get; set; }
-
-            [JsonPropertyName("carbohydrates_100g")]
-            public double? Carbohydrates100g { get; set; }
-
-            [JsonPropertyName("fiber_100g")]
-            public double? Fiber100g { get; set; }
-
-            [JsonPropertyName("sugars_100g")]
-            public double? Sugars100g { get; set; }
-
-            [JsonPropertyName("sodium_100g")]
-            public double? Sodium100g { get; set; }
+            if (double.IsNaN(v) || double.IsInfinity(v) || v < 0) return 0m;
+            return Math.Round((decimal)v, 2);
         }
     }
 }

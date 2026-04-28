@@ -13,7 +13,14 @@ import type {
     Meal,
     AddFoodToMeal,
     MealType,
-    AchievementDto
+    AchievementDto,
+    AdminUserListItem,
+    AdminUserDetails,
+    AdminFood,
+    AdminStats,
+    AdminAchievementDefinition,
+    AdminAuditLog,
+    PagedResult,
 } from '../types';
 
 // Base API configuration
@@ -103,7 +110,7 @@ export const foodsApi = {
         api.get('/foods/categories'),
 };
 
-// External Foods API (USDA + Open Food Facts)
+// External Foods API (FatSecret Platform — Premier Free, US data set)
 export const externalFoodsApi = {
     searchByName: (query: string, source: 'off' | 'ukraine' = 'ukraine'): Promise<AxiosResponse<ExternalFood[]>> =>
         api.get('/foods/external/search', { params: { query, source } }),
@@ -168,6 +175,17 @@ export const usersApi = {
     updateProfile: (data: Partial<User>): Promise<AxiosResponse<User>> =>
         api.put('/users/profile', data),
 
+    updateAvatar: (file: Blob, filename = 'avatar.jpg'): Promise<AxiosResponse<{ avatarUrl: string }>> => {
+        const formData = new FormData();
+        formData.append('file', file, filename);
+        return api.put('/users/avatar', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+    },
+
+    deleteAvatar: (): Promise<AxiosResponse<{ avatarUrl: null }>> =>
+        api.delete('/users/avatar'),
+
     addWeightRecord: (weight: number, height?: number): Promise<AxiosResponse<any>> =>
         api.post('/users/weight', { weight, height }),
 
@@ -185,6 +203,73 @@ export const achievementsApi = {
 
     check: (): Promise<AxiosResponse<AchievementDto[]>> =>
         api.post('/achievements/check'),
+};
+
+// Admin API — усі endpoint-и захищені [Authorize(Roles="Admin")] на бекенді.
+export const adminApi = {
+    // Stats
+    getStats: (): Promise<AxiosResponse<AdminStats>> =>
+        api.get('/admin/stats'),
+
+    // Users
+    listUsers: (params: {
+        search?: string;
+        role?: string;
+        blocked?: boolean;
+        page?: number;
+        pageSize?: number;
+    }): Promise<AxiosResponse<PagedResult<AdminUserListItem>>> =>
+        api.get('/admin/users', { params }),
+
+    getUser: (id: number): Promise<AxiosResponse<AdminUserDetails>> =>
+        api.get(`/admin/users/${id}`),
+
+    blockUser: (id: number, reason?: string): Promise<AxiosResponse<void>> =>
+        api.post(`/admin/users/${id}/block`, { reason }),
+
+    unblockUser: (id: number): Promise<AxiosResponse<void>> =>
+        api.post(`/admin/users/${id}/unblock`),
+
+    deleteUser: (id: number): Promise<AxiosResponse<void>> =>
+        api.delete(`/admin/users/${id}`),
+
+    // Foods (custom-foods moderation)
+    listFoods: (params: {
+        search?: string;
+        userId?: number;
+        page?: number;
+        pageSize?: number;
+    }): Promise<AxiosResponse<PagedResult<AdminFood>>> =>
+        api.get('/admin/foods', { params }),
+
+    updateFood: (id: number, data: FoodCreate): Promise<AxiosResponse<void>> =>
+        api.put(`/admin/foods/${id}`, data),
+
+    deleteFood: (id: number): Promise<AxiosResponse<void>> =>
+        api.delete(`/admin/foods/${id}`),
+
+    // Achievements
+    getAchievementDefinitions: (): Promise<AxiosResponse<AdminAchievementDefinition[]>> =>
+        api.get('/admin/achievements/definitions'),
+
+    getUserAchievements: (userId: number): Promise<AxiosResponse<{ code: string; unlockedAt: string }[]>> =>
+        api.get(`/admin/achievements/user/${userId}`),
+
+    awardAchievement: (userId: number, code: string): Promise<AxiosResponse<void>> =>
+        api.post('/admin/achievements/award', { userId, code }),
+
+    revokeAchievement: (userId: number, code: string): Promise<AxiosResponse<void>> =>
+        api.delete(`/admin/achievements/revoke/${userId}/${encodeURIComponent(code)}`),
+
+    // Audit logs
+    listLogs: (params: {
+        level?: string;
+        action?: string;
+        actorUserId?: number;
+        page?: number;
+        pageSize?: number;
+    }): Promise<AxiosResponse<PagedResult<AdminAuditLog>>> =>
+        api.get('/admin/logs', { params }),
 };
 
 export default api;

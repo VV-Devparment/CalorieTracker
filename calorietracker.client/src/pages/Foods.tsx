@@ -290,7 +290,7 @@ const Foods: React.FC = () => {
                     </>
                 ) : (
                     <div className="bg-white rounded-xl shadow-sm p-12 text-center">
-                        <div className="text-5xl mb-4">🍎</div>
+                        <img src="/logo.png" alt="CalorieTracker" className="w-16 h-16 object-contain mx-auto mb-4 opacity-50" />
                         <h3 className="text-lg font-medium text-gray-900 mb-1">
                             {searchQuery ? 'Нічого не знайдено' : 'Поки немає власних продуктів'}
                         </h3>

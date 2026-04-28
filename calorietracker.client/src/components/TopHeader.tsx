@@ -1,6 +1,6 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getCurrentUser, logout } from '../utils/auth';
+import { getCurrentUser, logout, isAdmin } from '../utils/auth';
 import { notificationService, type Notification } from '../services/notificationService';
 import Icon from '../components/Icon';
 
@@ -9,7 +9,17 @@ const TopHeader = () => {
     const [showNotifications, setShowNotifications] = useState(false);
     const [showProfile, setShowProfile] = useState(false);
     const [notifications, setNotifications] = useState<Notification[]>([]);
-    const user = getCurrentUser();
+    const [user, setUser] = useState(getCurrentUser());
+
+    useEffect(() => {
+        const refresh = () => setUser(getCurrentUser());
+        window.addEventListener('auth-user-changed', refresh);
+        window.addEventListener('storage', refresh);
+        return () => {
+            window.removeEventListener('auth-user-changed', refresh);
+            window.removeEventListener('storage', refresh);
+        };
+    }, []);
 
     // Завантаження повідомлень при монтуванні компонента
     useEffect(() => {
@@ -63,6 +73,11 @@ const TopHeader = () => {
         navigate('/profile');
     };
 
+    const handleAdminClick = () => {
+        setShowProfile(false);
+        navigate('/admin');
+    };
+
     // Закриваємо дропдауни при кліку поза ними
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -111,7 +126,7 @@ const TopHeader = () => {
                 <div className="flex items-center justify-between">
                     {/* App Logo/Title */}
                     <div className="flex items-center space-x-2">
-                        <span className="text-2xl">🍎</span>
+                        <img src="/logo.png" alt="CalorieTracker" className="w-8 h-8 object-contain" />
                         <h1 className="text-lg font-bold text-gray-900">CalorieTracker</h1>
                     </div>
 
@@ -204,28 +219,54 @@ const TopHeader = () => {
                         {/* Profile */}
                         <div className="relative">
                             <button
-                                className="profile-button p-2 rounded-full hover:bg-gray-100 transition-colors"
+                                className="profile-button rounded-full hover:bg-gray-100 transition-colors flex items-center justify-center"
                                 onClick={() => setShowProfile(!showProfile)}
+                                aria-label="Профіль"
                             >
-                                <Icon name="profile" size={20} color="gray" />
+                                {user?.avatarUrl ? (
+                                    <img
+                                        src={user.avatarUrl}
+                                        alt="Аватар"
+                                        className="w-9 h-9 rounded-full object-cover border border-gray-200"
+                                    />
+                                ) : (
+                                    <span className="p-2 inline-flex">
+                                        <Icon name="profile" size={20} color="gray" />
+                                    </span>
+                                )}
                             </button>
 
                             {/* Profile Dropdown */}
                             {showProfile && (
                                 <div className="profile-dropdown absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
                                     <div className="p-4 border-b border-gray-100">
-                                        <div className="flex items-center space-x-3">
-                                            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                                                <Icon name="profile" size={24} color="blue" />
-                                            </div>
-                                            <div>
-                                                <p className="font-semibold text-gray-900">{user?.name}</p>
-                                                <p className="text-sm text-gray-500">{user?.email}</p>
-                                            </div>
+                                        <div className="flex items-center justify-between">
+                                            <p className="font-semibold text-gray-900">{user?.name}</p>
+                                            {isAdmin() && (
+                                                <span className="text-[10px] font-bold tracking-wide px-2 py-0.5 rounded-full bg-gradient-to-r from-orange-500 to-lime-500 text-white">
+                                                    ADMIN
+                                                </span>
+                                            )}
                                         </div>
+                                        <p className="text-sm text-gray-500">{user?.email}</p>
                                     </div>
 
                                     <div className="p-2">
+                                        {isAdmin() && (
+                                            <button
+                                                onClick={handleAdminClick}
+                                                className="w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-orange-50 transition-colors text-left group"
+                                            >
+                                                <span className="w-9 h-9 rounded-lg bg-gradient-to-br from-orange-500 to-lime-500 flex items-center justify-center text-white shadow-sm">
+                                                    <Icon name="settings" size={18} color="white" />
+                                                </span>
+                                                <div>
+                                                    <p className="text-sm font-semibold text-gray-900 group-hover:text-orange-700">Адмін-панель</p>
+                                                    <p className="text-xs text-gray-500">Користувачі, статистика, модерація</p>
+                                                </div>
+                                            </button>
+                                        )}
+
                                         <button
                                             onClick={handleProfileClick}
                                             className="w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors text-left"

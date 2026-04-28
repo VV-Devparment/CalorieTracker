@@ -1,5 +1,5 @@
 // src/components/Icon.tsx
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
 interface IconProps {
     name: string;
@@ -9,12 +9,18 @@ interface IconProps {
 }
 
 const Icon: React.FC<IconProps> = ({ name, size = 24, className = '', color }) => {
+    const [ext, setExt] = useState<'svg' | 'png'>('svg');
+
+    // Reset extension when name changes вЂ” re-try .svg first
+    useEffect(() => { setExt('svg'); }, [name]);
+
     return (
         <img
-            src={`/icons/${name}.svg`}
+            src={`/icons/${name}.${ext}`}
             alt={name}
             width={size}
             height={size}
+            onError={() => { if (ext === 'svg') setExt('png'); }}
             className={className}
             style={{
                 filter: color ? getColorFilter(color) : undefined,
@@ -24,7 +30,7 @@ const Icon: React.FC<IconProps> = ({ name, size = 24, className = '', color }) =
     );
 };
 
-// Функція для конвертації кольорів в CSS filter
+// пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ CSS filter
 const getColorFilter = (color: string): string => {
     const colorFilters: { [key: string]: string } = {
         'blue': 'invert(27%) sepia(51%) saturate(2878%) hue-rotate(346deg) brightness(104%) contrast(97%)',

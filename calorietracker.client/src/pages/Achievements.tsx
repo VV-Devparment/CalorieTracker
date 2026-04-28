@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { achievementsApi } from '../services/api';
 import type { AchievementDto } from '../types';
+import Icon from '../components/Icon';
 
 const Achievements: React.FC = () => {
     const [achievements, setAchievements] = useState<AchievementDto[]>([]);
@@ -55,8 +56,9 @@ const Achievements: React.FC = () => {
 
                 {/* Header */}
                 <div className="bg-white rounded-2xl shadow-sm p-6 mb-4">
-                    <h1 className="text-xl font-bold text-gray-900 text-center mb-4">
-                        🏆 Досягнення
+                    <h1 className="text-xl font-bold text-gray-900 text-center mb-4 flex items-center justify-center gap-2">
+                        <Icon name="trophy" size={24} color="yellow" />
+                        <span>Досягнення</span>
                     </h1>
 
                     {/* Progress bar */}
@@ -79,18 +81,18 @@ const Achievements: React.FC = () => {
                         disabled={checking}
                         className="w-full py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 disabled:opacity-60 transition-colors"
                     >
-                        {checking ? 'Перевіряємо...' : '🔄 Перевірити нові досягнення'}
+                        {checking ? 'Перевіряємо...' : 'Перевірити нові досягнення'}
                     </button>
                 </div>
 
                 {/* Newly unlocked banner */}
                 {newlyUnlocked.length > 0 && (
                     <div className="bg-gradient-to-r from-yellow-400 to-orange-400 rounded-2xl shadow-sm p-4 mb-4">
-                        <p className="text-white font-bold text-center mb-2">🎉 Нові досягнення розблоковано!</p>
+                        <p className="text-white font-bold text-center mb-2">Нові досягнення розблоковано!</p>
                         <div className="space-y-2">
                             {newlyUnlocked.map(a => (
                                 <div key={a.code} className="bg-white bg-opacity-20 rounded-xl p-3 flex items-center space-x-3">
-                                    <span className="text-2xl">{a.emoji}</span>
+                                    <Icon name={a.iconName} size={28} color="white" />
                                     <div>
                                         <p className="text-white font-semibold text-sm">{a.title}</p>
                                         <p className="text-white text-xs opacity-80">{a.description}</p>
@@ -135,10 +137,14 @@ const Achievements: React.FC = () => {
                                                     : 'bg-gray-50 opacity-60'
                                             }`}
                                         >
-                                            {/* Emoji */}
-                                            <div className={`text-3xl flex-shrink-0 ${achievement.isUnlocked ? '' : 'grayscale opacity-40'}`}
-                                                style={{ filter: achievement.isUnlocked ? 'none' : 'grayscale(1) opacity(0.4)' }}>
-                                                {achievement.isUnlocked ? achievement.emoji : '🔒'}
+                                            {/* Icon */}
+                                            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-white flex items-center justify-center"
+                                                style={{ filter: achievement.isUnlocked ? 'none' : 'grayscale(1) opacity(0.5)' }}>
+                                                <Icon
+                                                    name={achievement.isUnlocked ? achievement.iconName : 'cancel'}
+                                                    size={28}
+                                                    color={achievement.isUnlocked ? 'blue' : 'gray'}
+                                                />
                                             </div>
 
                                             {/* Info */}

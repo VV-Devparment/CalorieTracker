@@ -8,7 +8,7 @@ namespace CalorieTracker.Server.Services
         string Code,
         string Title,
         string Description,
-        string Emoji,
+        string IconName,
         string Category
     );
 
@@ -16,7 +16,7 @@ namespace CalorieTracker.Server.Services
         string Code,
         string Title,
         string Description,
-        string Emoji,
+        string IconName,
         string Category,
         bool IsUnlocked,
         DateTime? UnlockedAt
@@ -27,31 +27,31 @@ namespace CalorieTracker.Server.Services
         private static readonly List<AchievementDefinition> Definitions =
         [
             // Meals
-            new("FIRST_MEAL",       "Перший крок",        "Додайте перший прийом їжі",               "🍽️", "Харчування"),
-            new("MEALS_10",         "Початківець",        "Зробіть 10 прийомів їжі",                 "🥗", "Харчування"),
-            new("MEALS_50",         "Постійний",          "Зробіть 50 прийомів їжі",                 "💪", "Харчування"),
-            new("MEALS_100",        "Профі",              "Зробіть 100 прийомів їжі",                "🏆", "Харчування"),
+            new("FIRST_MEAL",       "Перший крок",        "Додайте перший прийом їжі",               "first-step", "Харчування"),
+            new("MEALS_10",         "Початківець",        "Зробіть 10 прийомів їжі",                 "salad", "Харчування"),
+            new("MEALS_50",         "Постійний",          "Зробіть 50 прийомів їжі",                 "muscle", "Харчування"),
+            new("MEALS_100",        "Профі",              "Зробіть 100 прийомів їжі",                "trophy", "Харчування"),
 
             // Active days
-            new("DAYS_7",           "Тиждень",            "7 днів з записами харчування",             "📅", "Активність"),
-            new("DAYS_30",          "Місяць",             "30 днів з записами харчування",            "🗓️", "Активність"),
+            new("DAYS_7",           "Тиждень",            "7 днів з записами харчування",             "calendar", "Активність"),
+            new("DAYS_30",          "Місяць",             "30 днів з записами харчування",            "calendar-month", "Активність"),
 
             // Streak
-            new("STREAK_3",         "3 дні поспіль",      "Відстежуйте харчування 3 дні підряд",     "🔥", "Серія"),
-            new("STREAK_7",         "Тижнева серія",      "Відстежуйте харчування 7 днів підряд",    "⚡", "Серія"),
-            new("STREAK_14",        "Двотижнева серія",   "Відстежуйте харчування 14 днів підряд",   "🌟", "Серія"),
+            new("STREAK_3",         "3 дні поспіль",      "Відстежуйте харчування 3 дні підряд",     "flame", "Серія"),
+            new("STREAK_7",         "Тижнева серія",      "Відстежуйте харчування 7 днів підряд",    "lightning", "Серія"),
+            new("STREAK_14",        "Двотижнева серія",   "Відстежуйте харчування 14 днів підряд",   "star", "Серія"),
 
             // Calorie goal
-            new("CALORIE_GOAL",     "Ціль досягнута",     "Вперше досягніть денної цілі калорій",    "🎯", "Цілі"),
-            new("CALORIE_GOAL_5",   "Стабільність",       "Досягніть цілі калорій 5 разів",          "✅", "Цілі"),
-            new("CALORIE_GOAL_20",  "Дисципліна",         "Досягніть цілі калорій 20 разів",         "🎖️", "Цілі"),
+            new("CALORIE_GOAL",     "Ціль досягнута",     "Вперше досягніть денної цілі калорій",    "goal", "Цілі"),
+            new("CALORIE_GOAL_5",   "Стабільність",       "Досягніть цілі калорій 5 разів",          "success", "Цілі"),
+            new("CALORIE_GOAL_20",  "Дисципліна",         "Досягніть цілі калорій 20 разів",         "medal", "Цілі"),
 
             // Weight
-            new("WEIGHT_FIRST",     "Перший вимір",       "Додайте перший запис ваги",               "⚖️", "Вага"),
-            new("WEIGHT_10",        "Тримаємо курс",      "Зробіть 10 записів ваги",                 "📊", "Вага"),
+            new("WEIGHT_FIRST",     "Перший вимір",       "Додайте перший запис ваги",               "weight", "Вага"),
+            new("WEIGHT_10",        "Тримаємо курс",      "Зробіть 10 записів ваги",                 "chart", "Вага"),
 
             // Food
-            new("CUSTOM_FOOD",      "Власний продукт",    "Додайте перший власний продукт",          "🧑‍🍳", "Продукти"),
+            new("CUSTOM_FOOD",      "Власний продукт",    "Додайте перший власний продукт",          "chef", "Продукти"),
         ];
 
         public static List<AchievementDefinition> AllDefinitions => Definitions;
@@ -66,7 +66,7 @@ namespace CalorieTracker.Server.Services
             {
                 var unlock = unlocked.FirstOrDefault(u => u.Code == def.Code);
                 return new AchievementDto(
-                    def.Code, def.Title, def.Description, def.Emoji, def.Category,
+                    def.Code, def.Title, def.Description, def.IconName, def.Category,
                     unlock != null, unlock?.UnlockedAt
                 );
             }).ToList();
@@ -159,7 +159,7 @@ namespace CalorieTracker.Server.Services
                 .Select(code =>
                 {
                     var def = Definitions.First(d => d.Code == code);
-                    return new AchievementDto(def.Code, def.Title, def.Description, def.Emoji, def.Category,
+                    return new AchievementDto(def.Code, def.Title, def.Description, def.IconName, def.Category,
                         true, DateTime.UtcNow);
                 })
                 .ToList();

@@ -262,7 +262,7 @@ const AddFoodModal = ({ date, mealType, onClose, onFoodAdded }: AddFoodModalProp
                             backgroundColor: activeTab === tab ? '#3b82f6' : '#f3f4f6',
                             color: activeTab === tab ? 'white' : '#6b7280',
                         }}>
-                            {tab === 'external' ? '🌐 Open Food Facts' : '👤 Мої продукти'}
+                            {tab === 'external' ? '🔍 Пошук' : '👤 Мої продукти'}
                         </button>
                     ))}
                 </div>
@@ -280,7 +280,7 @@ const AddFoodModal = ({ date, mealType, onClose, onFoodAdded }: AddFoodModalProp
                                     </span>
                                     <input
                                         type="text"
-                                        placeholder="Введіть назву (українською або англійською)..."
+                                        placeholder="Введіть назву продукту..."
                                         value={extQuery}
                                         onChange={e => { setExtQuery(e.target.value); setSelectedFood(null); }}
                                         style={{
@@ -312,7 +312,7 @@ const AddFoodModal = ({ date, mealType, onClose, onFoodAdded }: AddFoodModalProp
                                 </div>
                             )}
                             <p style={{ fontSize: '11px', color: '#9ca3af', marginBottom: '12px' }}>
-                                Пошук у Open Food Facts. Наприклад: «молоко», «яблуко», «chicken», «oatmeal»
+                                Наприклад: «milk», «apple», «chicken», «oatmeal». Локальних укр. брендів поки немає — додавайте їх вручну у вкладці «Мої продукти».
                             </p>
 
                             {extLoading ? (

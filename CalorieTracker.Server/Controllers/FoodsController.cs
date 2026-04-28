@@ -37,8 +37,10 @@ namespace CalorieTracker.Server.Controllers
 
                 if (!string.IsNullOrEmpty(searchDto.Query))
                 {
-                    query = query.Where(f => f.Name.Contains(searchDto.Query) ||
-                                            (f.Brand != null && f.Brand.Contains(searchDto.Query)));
+                    // ILike — case-insensitive LIKE на Postgres (звичайний LIKE/Contains case-sensitive).
+                    var pattern = $"%{searchDto.Query}%";
+                    query = query.Where(f => EF.Functions.ILike(f.Name, pattern) ||
+                                            (f.Brand != null && EF.Functions.ILike(f.Brand, pattern)));
                 }
 
                 if (!string.IsNullOrEmpty(searchDto.Category))
@@ -197,9 +199,11 @@ namespace CalorieTracker.Server.Controllers
             {
                 var userId = int.Parse(User.FindFirst("userId")?.Value ?? "0");
 
+                var pattern = $"%{query}%";
                 var foods = await _context.Foods
                     .Where(f => f.IsCustom && f.CreatedBy == userId &&
-                               (f.Name.Contains(query) || (f.Brand != null && f.Brand.Contains(query))))
+                               (EF.Functions.ILike(f.Name, pattern) ||
+                                (f.Brand != null && EF.Functions.ILike(f.Brand, pattern))))
                     .Take(20)
                     .Select(f => new FoodDto
                     {
@@ -328,14 +332,59 @@ namespace CalorieTracker.Server.Controllers
             if (string.IsNullOrWhiteSpace(query))
                 return BadRequest(new { message = "Вкажіть запит для пошуку" });
 
+            var userId = int.Parse(User.FindFirst("userId")?.Value ?? "0");
+            var trimmed = query.Trim();
+            var pattern = $"%{trimmed}%";
+
+            // Спочатку — власні продукти користувача з локальної БД (ILike — без регістру).
+            // Так навіть коли OFF падає, користувач бачить свої продукти.
+            var localTask = _context.Foods
+                .Where(f => f.IsCustom && f.CreatedBy == userId &&
+                           (EF.Functions.ILike(f.Name, pattern) ||
+                            (f.Brand != null && EF.Functions.ILike(f.Brand, pattern))))
+                .OrderBy(f => f.Name)
+                .Take(20)
+                .Select(f => new ExternalFoodDto
+                {
+                    ExternalId = "local:" + f.Id,
+                    Source = "Custom",
+                    Name = f.Name,
+                    Brand = f.Brand,
+                    CaloriesPer100g = f.CaloriesPer100g,
+                    ProteinPer100g = f.ProteinPer100g,
+                    FatsPer100g = f.FatsPer100g,
+                    CarbsPer100g = f.CarbsPer100g,
+                    FiberPer100g = f.FiberPer100g,
+                    SugarPer100g = f.SugarPer100g,
+                    SodiumPer100g = f.SodiumPer100g,
+                    Category = f.Category,
+                    Barcode = f.Barcode,
+                })
+                .ToListAsync();
+
+            // Зовнішній пошук — паралельно, фейл не валить запит цілком.
+            var externalTask = SafeSearchExternalAsync(trimmed, source);
+
+            await Task.WhenAll(localTask, externalTask);
+
+            var local = localTask.Result;
+            var external = externalTask.Result;
+
+            // Локальні продукти йдуть першими — вони найрелевантніші для користувача.
+            return Ok(local.Concat(external));
+        }
+
+        private async Task<List<ExternalFoodDto>> SafeSearchExternalAsync(string query, string source)
+        {
             try
             {
-                var results = await _externalFoodService.SearchByNameAsync(query, source);
-                return Ok(results);
+                return await _externalFoodService.SearchByNameAsync(query, source);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                return StatusCode(500, new { message = "Помилка при пошуку у зовнішній базі", error = ex.Message });
+                // Логування — у самому ExternalFoodService. Фейл OFF не повинен ламати весь пошук:
+                // якщо локальна БД має збіги — користувач їх побачить.
+                return new List<ExternalFoodDto>();
             }
         }
 
