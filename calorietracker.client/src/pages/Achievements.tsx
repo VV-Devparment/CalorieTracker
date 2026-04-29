@@ -69,7 +69,7 @@ const Achievements: React.FC = () => {
                         </div>
                         <div className="w-full bg-gray-200 rounded-full h-3">
                             <div
-                                className="h-3 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-500"
+                                className="h-3 rounded-full bg-gradient-to-r from-brand-500 to-fresh-500 transition-all duration-500"
                                 style={{ width: totalCount > 0 ? `${(unlockedCount / totalCount) * 100}%` : '0%' }}
                             />
                         </div>

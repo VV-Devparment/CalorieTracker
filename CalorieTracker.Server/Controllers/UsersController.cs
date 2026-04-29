@@ -246,11 +246,23 @@ namespace CalorieTracker.Server.Controllers
                 }
                 else
                 {
+                    // If height is not provided, carry over the last known height so it
+                    // doesn't disappear when the user records a new weight without re-entering it.
+                    decimal? heightToStore = dto.Height;
+                    if (!heightToStore.HasValue)
+                    {
+                        heightToStore = await _context.WeightRecords
+                            .Where(wr => wr.UserId == userId && wr.Height != null)
+                            .OrderByDescending(wr => wr.RecordDate)
+                            .Select(wr => wr.Height)
+                            .FirstOrDefaultAsync();
+                    }
+
                     var weightRecord = new WeightRecord
                     {
                         UserId = userId,
                         Weight = dto.Weight,
-                        Height = dto.Height,
+                        Height = heightToStore,
                         RecordDate = today,
                         CreatedAt = DateTime.UtcNow
                     };
