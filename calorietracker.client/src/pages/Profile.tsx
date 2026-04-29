@@ -246,18 +246,13 @@ const Profile = () => {
     const bmiCategory = bmi ? getBMICategory(Number(bmi)) : null;
 
     return (
-        <div className="min-h-screen bg-gray-50 py-6">
+        <div className="min-h-screen py-5 pb-28">
             <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-               
 
-                {/* Header */}
-                <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h1 className="text-2xl font-bold text-gray-900">Профіль користувача</h1>
-                            <p className="text-gray-600 mt-1">Керуйте своїми даними та налаштуваннями</p>
-                        </div>
-                        <div className="flex flex-col items-center space-y-2">
+                {/* Hero Header */}
+                <div className="hero-card p-5 sm:p-6 mb-4 animate-fade-in-up">
+                    <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center gap-5">
+                        <div className="flex flex-col items-center gap-2 mx-auto sm:mx-0">
                             <input
                                 ref={fileInputRef}
                                 type="file"
@@ -269,78 +264,97 @@ const Profile = () => {
                                 type="button"
                                 onClick={handleAvatarPick}
                                 disabled={avatarUploading}
-                                className="relative group rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                                className="relative group rounded-2xl focus:outline-none focus:ring-4 focus:ring-white/30 disabled:opacity-50"
                                 title={user?.avatarUrl ? 'Змінити аватар' : 'Додати аватар'}
                             >
                                 {user?.avatarUrl ? (
                                     <img
                                         src={user.avatarUrl}
                                         alt="Аватар"
-                                        className="w-16 h-16 rounded-full object-cover border-2 border-blue-200"
+                                        className="w-20 h-20 rounded-2xl object-cover border-2 border-white/60 shadow-lifted"
                                     />
                                 ) : (
-                                    <div className="w-16 h-16 rounded-full bg-blue-50 border-2 border-blue-200 flex items-center justify-center">
-                                        <Icon name="user-profile" size={48} color="blue" />
+                                    <div className="w-20 h-20 rounded-2xl bg-white/20 backdrop-blur-sm border-2 border-white/40 flex items-center justify-center shadow-lifted">
+                                        <Icon name="user-profile" size={48} color="white" />
                                     </div>
                                 )}
-                                <span className="absolute inset-0 rounded-full bg-black bg-opacity-0 group-hover:bg-opacity-30 flex items-center justify-center text-white text-xs opacity-0 group-hover:opacity-100 transition">
-                                    {avatarUploading ? '...' : 'Змінити'}
+                                <span className="absolute inset-0 rounded-2xl bg-black/0 group-hover:bg-black/30 flex items-center justify-center text-white text-xs font-semibold opacity-0 group-hover:opacity-100 transition">
+                                    {avatarUploading ? (
+                                        <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                                    ) : 'Змінити'}
                                 </span>
                             </button>
-                            <button
-                                type="button"
-                                onClick={handleAvatarPick}
-                                disabled={avatarUploading}
-                                className="text-xs font-medium text-blue-600 hover:text-blue-800 disabled:opacity-50"
-                            >
-                                Змінити аватар
-                            </button>
-                            {user?.avatarUrl && (
+                            <div className="flex gap-2 text-[11px] font-semibold">
                                 <button
                                     type="button"
-                                    onClick={handleAvatarRemove}
+                                    onClick={handleAvatarPick}
                                     disabled={avatarUploading}
-                                    className="text-xs text-red-600 hover:text-red-800 disabled:opacity-50"
+                                    className="text-white/80 hover:text-white disabled:opacity-50 underline-offset-2 hover:underline"
                                 >
-                                    Видалити
+                                    Змінити
                                 </button>
-                            )}
+                                {user?.avatarUrl && (
+                                    <>
+                                        <span className="text-white/40">·</span>
+                                        <button
+                                            type="button"
+                                            onClick={handleAvatarRemove}
+                                            disabled={avatarUploading}
+                                            className="text-rose-100 hover:text-white disabled:opacity-50 underline-offset-2 hover:underline"
+                                        >
+                                            Видалити
+                                        </button>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                        <div className="flex-1 min-w-0 text-center sm:text-left">
+                            <p className="text-white/80 text-xs font-semibold tracking-wide uppercase">Особистий кабінет</p>
+                            <h1 className="text-2xl sm:text-3xl font-extrabold text-white drop-shadow leading-tight mt-0.5">{user?.name}</h1>
+                            <p className="text-white/80 text-sm mt-1 truncate">{user?.email}</p>
                         </div>
                     </div>
                 </div>
 
                 {/* Tabs */}
-                <div className="bg-white rounded-lg shadow-sm mb-6">
-                    <div className="border-b border-gray-200">
-                        <div className="flex space-x-8 px-6">
-                            {tabs.map((tab) => (
-                                <button
-                                    key={tab.id}
-                                    onClick={() => setActiveTab(tab.id)}
-                                    className={`flex items-center space-x-2 py-4 border-b-2 font-medium text-sm transition-colors ${activeTab === tab.id
-                                        ? 'border-blue-500 text-blue-600'
-                                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                <div className="card-glass mb-4 overflow-hidden">
+                    <div className="border-b border-cream-200 bg-cream-50/40">
+                        <div className="flex gap-1 px-2 sm:px-4 overflow-x-auto">
+                            {tabs.map((tab) => {
+                                const active = activeTab === tab.id;
+                                return (
+                                    <button
+                                        key={tab.id}
+                                        onClick={() => setActiveTab(tab.id)}
+                                        className={`flex items-center gap-2 py-3 px-4 border-b-2 font-semibold text-sm transition-all whitespace-nowrap ${
+                                            active
+                                                ? 'border-brand-500 text-brand-600'
+                                                : 'border-transparent text-gray-500 hover:text-gray-700'
                                         }`}
-                                >
-                                    <Icon name={tab.icon} size={18} color={activeTab === tab.id ? 'blue' : 'gray'} />
-                                    <span>{tab.label}</span>
-                                </button>
-                            ))}
+                                    >
+                                        <Icon name={tab.icon} size={18} color={active ? 'orange' : 'gray'} />
+                                        <span>{tab.label}</span>
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
 
-                    <div className="p-6">
+                    <div className="p-5 sm:p-6">
                         {/* Profile Tab */}
                         {activeTab === 'profile' && (
                             <div className="space-y-6">
                                 {/* Personal Info */}
                                 <div>
                                     <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
-                                        <h3 className="text-lg font-semibold text-gray-900">Особиста інформація</h3>
+                                        <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                                            <span className="w-1 h-5 rounded-full bg-brand-gradient" />
+                                            Особиста інформація
+                                        </h3>
                                         {!editing ? (
                                             <button
                                                 onClick={() => setEditing(true)}
-                                                className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center space-x-2"
+                                                className="w-full sm:w-auto px-4 py-2.5 bg-brand-gradient text-white rounded-xl shadow-pop hover:brightness-110 transition-all flex items-center justify-center gap-2 text-sm font-semibold"
                                             >
                                                 <Icon name="edit" size={16} color="white" />
                                                 <span>Редагувати</span>
@@ -349,7 +363,7 @@ const Profile = () => {
                                             <div className="flex items-center gap-2 w-full sm:w-auto">
                                                 <button
                                                     onClick={() => setEditing(false)}
-                                                    className="flex-1 sm:flex-none sm:w-36 px-3 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors flex items-center justify-center gap-1.5 text-sm"
+                                                    className="flex-1 sm:flex-none sm:w-36 px-3 py-2.5 bg-white border border-cream-300 text-gray-700 rounded-xl hover:bg-cream-50 transition-colors flex items-center justify-center gap-1.5 text-sm font-semibold"
                                                 >
                                                     <Icon name="close" size={16} color="gray" />
                                                     <span>Скасувати</span>
@@ -357,7 +371,7 @@ const Profile = () => {
                                                 <button
                                                     onClick={handleSave}
                                                     disabled={loading}
-                                                    className="flex-1 sm:flex-none sm:w-36 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5 text-sm"
+                                                    className="flex-1 sm:flex-none sm:w-36 px-3 py-2.5 btn-fresh rounded-xl disabled:opacity-50 flex items-center justify-center gap-1.5 text-sm font-semibold"
                                                 >
                                                     <Icon name="save" size={16} color="white" />
                                                     <span>{loading ? 'Збереження...' : 'Зберегти'}</span>
@@ -368,14 +382,14 @@ const Profile = () => {
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">Ім'я</label>
+                                            <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">Ім'я</label>
                                             {editing ? (
                                                 <input
                                                     type="text"
                                                     name="name"
                                                     value={formData.name}
                                                     onChange={handleInputChange}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                    className="w-full px-3.5 py-2.5 bg-white border border-cream-200 rounded-xl text-sm shadow-sm focus:outline-none focus:border-brand-400 focus:ring-4 focus:ring-brand-100 transition-all"
                                                 />
                                             ) : (
                                                 <p className="text-gray-900 font-medium">{user?.name}</p>
@@ -383,12 +397,12 @@ const Profile = () => {
                                         </div>
 
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                                            <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">Email</label>
                                             <p className="text-gray-900 font-medium">{user?.email}</p>
                                         </div>
 
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">Дата народження</label>
+                                            <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">Дата народження</label>
                                             {editing ? (
                                                 <input
                                                     type="date"
@@ -396,7 +410,7 @@ const Profile = () => {
                                                     value={formData.dateOfBirth}
                                                     max={new Date().toISOString().split('T')[0]}
                                                     onChange={handleInputChange}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                    className="w-full px-3.5 py-2.5 bg-white border border-cream-200 rounded-xl text-sm shadow-sm focus:outline-none focus:border-brand-400 focus:ring-4 focus:ring-brand-100 transition-all"
                                                 />
                                             ) : (
                                                 <p className="text-gray-900 font-medium">
@@ -408,13 +422,13 @@ const Profile = () => {
                                         </div>
 
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">Стать</label>
+                                            <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">Стать</label>
                                             {editing ? (
                                                 <select
                                                     name="gender"
                                                     value={formData.gender}
                                                     onChange={handleInputChange}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                    className="w-full px-3.5 py-2.5 bg-white border border-cream-200 rounded-xl text-sm shadow-sm focus:outline-none focus:border-brand-400 focus:ring-4 focus:ring-brand-100 transition-all"
                                                 >
                                                     <option value="">Оберіть стать</option>
                                                     <option value="male">Чоловіча</option>
@@ -429,7 +443,7 @@ const Profile = () => {
                                         </div>
 
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">Вага (кг)</label>
+                                            <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">Вага (кг)</label>
                                             {editing ? (
                                                 <input
                                                     type="number"
@@ -437,7 +451,7 @@ const Profile = () => {
                                                     value={formData.weight}
                                                     onChange={handleInputChange}
                                                     step="0.1"
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                    className="w-full px-3.5 py-2.5 bg-white border border-cream-200 rounded-xl text-sm shadow-sm focus:outline-none focus:border-brand-400 focus:ring-4 focus:ring-brand-100 transition-all"
                                                 />
                                             ) : (
                                                 <p className="text-gray-900 font-medium">{user?.weight ? `${user.weight} кг` : 'Не вказано'}</p>
@@ -445,14 +459,14 @@ const Profile = () => {
                                         </div>
 
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">Зріст (см)</label>
+                                            <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">Зріст (см)</label>
                                             {editing ? (
                                                 <input
                                                     type="number"
                                                     name="height"
                                                     value={formData.height}
                                                     onChange={handleInputChange}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                    className="w-full px-3.5 py-2.5 bg-white border border-cream-200 rounded-xl text-sm shadow-sm focus:outline-none focus:border-brand-400 focus:ring-4 focus:ring-brand-100 transition-all"
                                                 />
                                             ) : (
                                                 <p className="text-gray-900 font-medium">{user?.height ? `${user.height} см` : 'Не вказано'}</p>
@@ -460,13 +474,13 @@ const Profile = () => {
                                         </div>
 
                                         <div className="md:col-span-2">
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">Рівень активності</label>
+                                            <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">Рівень активності</label>
                                             {editing ? (
                                                 <select
                                                     name="activityLevel"
                                                     value={formData.activityLevel}
                                                     onChange={handleInputChange}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                    className="w-full px-3.5 py-2.5 bg-white border border-cream-200 rounded-xl text-sm shadow-sm focus:outline-none focus:border-brand-400 focus:ring-4 focus:ring-brand-100 transition-all"
                                                 >
                                                     <option value={1}>Сидячий спосіб життя</option>
                                                     <option value={2}>Легка активність (1-3 рази на тиждень)</option>
@@ -480,7 +494,7 @@ const Profile = () => {
                                         </div>
 
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">Денна норма калорій</label>
+                                            <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">Денна норма калорій</label>
                                             <p className="text-gray-900 font-medium text-blue-600">
                                                 {user?.dailyCalorieGoal ? `${user.dailyCalorieGoal} ккал` : 'Не розраховано (вкажіть вік, вагу, зріст та стать)'}
                                             </p>
@@ -491,17 +505,20 @@ const Profile = () => {
 
                                 {/* BMI Card */}
                                 {bmi && (
-                                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-lg">
-                                        <h3 className="text-lg font-semibold text-gray-900 mb-3">Індекс маси тіла (BMI)</h3>
+                                    <div className="relative overflow-hidden rounded-3xl p-5 shadow-soft border border-cream-200 bg-gradient-to-br from-blue-50 via-white to-cream-50">
+                                        <h3 className="text-base font-bold text-gray-900 mb-3 flex items-center gap-2">
+                                            <span className="w-1 h-4 rounded-full bg-blue-500" />
+                                            Індекс маси тіла (BMI)
+                                        </h3>
                                         <div className="flex items-center justify-between">
                                             <div>
-                                                <div className="text-3xl font-bold text-blue-600">{bmi}</div>
-                                                <div className={`text-sm font-medium ${bmiCategory?.color}`}>
+                                                <div className="text-4xl font-extrabold text-blue-600 leading-none">{bmi}</div>
+                                                <div className={`text-sm font-semibold mt-1.5 ${bmiCategory?.color}`}>
                                                     {bmiCategory?.text}
                                                 </div>
                                             </div>
-                                            <div className="flex justify-center">
-                                                <Icon name="weight" size={48} color="blue" />
+                                            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center shadow-pop">
+                                                <Icon name="weight" size={28} color="white" />
                                             </div>
                                         </div>
                                     </div>
@@ -511,27 +528,32 @@ const Profile = () => {
 
                         {/* Weight Tab */}
                         {activeTab === 'weight' && (
-                            <div className="space-y-6">
-                                <h3 className="text-lg font-semibold text-gray-900">Відстеження ваги</h3>
+                            <div className="space-y-5">
+                                <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                                    <span className="w-1 h-5 rounded-full bg-brand-gradient" />
+                                    Відстеження ваги
+                                </h3>
 
                                 {/* Add Weight */}
-                                <div className="bg-gray-50 p-4 rounded-lg">
-                                    <h4 className="font-medium text-gray-900 mb-3 flex items-center space-x-2">
-                                        <Icon name="add" size={20} color="gray" />
+                                <div className="bg-gradient-to-br from-fresh-50 via-white to-cream-50 border border-fresh-200/60 rounded-2xl p-4">
+                                    <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2 text-sm">
+                                        <span className="w-8 h-8 rounded-xl bg-fresh-gradient flex items-center justify-center shadow-sm">
+                                            <Icon name="add" size={16} color="white" />
+                                        </span>
                                         <span>Додати нову вагу</span>
                                     </h4>
-                                    <div className="flex space-x-3">
+                                    <div className="flex flex-col sm:flex-row gap-2">
                                         <input
                                             type="number"
                                             value={newWeight}
                                             onChange={(e) => setNewWeight(e.target.value)}
                                             placeholder="Введіть вагу в кг"
                                             step="0.1"
-                                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                            className="flex-1 px-3.5 py-2.5 bg-white border border-cream-200 rounded-xl text-sm shadow-sm focus:outline-none focus:border-brand-400 focus:ring-4 focus:ring-brand-100 transition-all"
                                         />
                                         <button
                                             onClick={handleAddWeight}
-                                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
+                                            className="px-5 py-2.5 btn-fresh rounded-xl text-sm font-semibold flex items-center justify-center gap-2"
                                         >
                                             <Icon name="save" size={16} color="white" />
                                             <span>Додати</span>
@@ -541,32 +563,36 @@ const Profile = () => {
 
                                 {/* Weight History */}
                                 <div>
-                                    <h4 className="font-medium text-gray-900 mb-3 flex items-center space-x-2">
-                                        <Icon name="history" size={20} color="gray" />
+                                    <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2 text-sm">
+                                        <span className="w-8 h-8 rounded-xl bg-cream-100 flex items-center justify-center">
+                                            <Icon name="history" size={16} color="gray" />
+                                        </span>
                                         <span>Історія змін ваги</span>
                                     </h4>
                                     {weightHistory.length > 0 ? (
-                                        <div className="space-y-2 max-h-64 overflow-y-auto">
+                                        <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
                                             {weightHistory.map((record, index) => (
-                                                <div key={index} className="flex justify-between items-center p-3 bg-white border rounded-lg">
-                                                    <div className="flex items-center space-x-3">
-                                                        <Icon name="calendar" size={16} color="gray" />
-                                                        <span className="text-gray-600">{formatDate(record.date)}</span>
+                                                <div key={index} className="flex justify-between items-center p-3 bg-white border border-cream-200 rounded-2xl shadow-sm hover:shadow-soft transition-shadow">
+                                                    <div className="flex items-center gap-2.5">
+                                                        <span className="w-8 h-8 rounded-xl bg-cream-100 flex items-center justify-center">
+                                                            <Icon name="calendar" size={14} color="gray" />
+                                                        </span>
+                                                        <span className="text-sm text-gray-600">{formatDate(record.date)}</span>
                                                     </div>
-                                                    <div className="flex items-center space-x-2">
+                                                    <div className="flex items-center gap-2">
                                                         <Icon name="weight" size={16} color="blue" />
-                                                        <span className="font-semibold text-gray-900">{record.weight} кг</span>
+                                                        <span className="font-bold text-gray-900">{record.weight} <span className="text-xs font-medium text-gray-500">кг</span></span>
                                                     </div>
                                                 </div>
                                             ))}
                                         </div>
                                     ) : (
-                                        <div className="text-center py-8 text-gray-500">
-                                            <div className="mb-3 flex justify-center">
-                                                <Icon name="weight" size={64} color="gray" />
+                                        <div className="text-center py-10 text-gray-500 bg-cream-50/40 rounded-2xl border border-dashed border-cream-300">
+                                            <div className="mb-3 flex justify-center opacity-60">
+                                                <Icon name="weight" size={56} color="gray" />
                                             </div>
-                                            <p>Історія ваги порожня</p>
-                                            <p className="text-sm mt-1">Додайте перший запис ваги</p>
+                                            <p className="font-semibold text-gray-700">Історія ваги порожня</p>
+                                            <p className="text-xs mt-1">Додайте перший запис ваги</p>
                                         </div>
                                     )}
                                 </div>

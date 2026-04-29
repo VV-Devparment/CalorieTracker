@@ -203,79 +203,85 @@ const AddFoodModal = ({ date, mealType, onClose, onFoodAdded }: AddFoodModalProp
         f.name.toLowerCase().includes(myFoodsQuery.toLowerCase())
     );
 
-    const FoodRow = ({ food, isSelected, onClick }: { food: SelectedFood & { id?: number }, isSelected: boolean, onClick: () => void }) => (
-        <div
+    const FoodRow = ({ food, isSelected, onClick, badge }: { food: SelectedFood & { id?: number }, isSelected: boolean, onClick: () => void, badge?: React.ReactNode }) => (
+        <button
+            type="button"
             onClick={onClick}
-            style={{
-                padding: '12px 16px',
-                border: isSelected ? '2px solid #3b82f6' : '1px solid #e5e7eb',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                backgroundColor: isSelected ? '#eff6ff' : 'white',
-                marginBottom: '8px',
-                transition: 'all 0.15s'
-            }}
+            className={`relative w-full text-left px-3.5 py-3 rounded-2xl border transition-all ${
+                isSelected
+                    ? 'border-brand-400 bg-brand-50 ring-2 ring-brand-100'
+                    : 'border-cream-200 bg-white hover:border-brand-300 hover:bg-cream-50'
+            }`}
         >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                    <div style={{ fontWeight: '500', color: '#1f2937', marginBottom: '2px' }}>{food.name}</div>
-                    {food.brand && <div style={{ fontSize: '12px', color: '#6b7280' }}>{food.brand}</div>}
+            <div className="flex justify-between items-start gap-3">
+                <div className="min-w-0 flex-1">
+                    <div className="font-semibold text-gray-900 text-sm leading-tight truncate">{food.name}</div>
+                    {food.brand && <div className="text-xs text-gray-500 mt-0.5 truncate">{food.brand}</div>}
                 </div>
-                <div style={{ textAlign: 'right', fontSize: '13px', color: '#6b7280', marginLeft: '12px' }}>
-                    <div style={{ fontWeight: '600', color: '#1f2937' }}>{food.caloriesPer100g} ккал/100г</div>
-                    <div style={{ fontSize: '11px' }}>
-                        Б:{food.proteinPer100g}г Ж:{food.fatsPer100g}г В:{food.carbsPer100g}г
+                <div className="text-right flex-shrink-0">
+                    <div className="font-bold text-gray-900 text-sm">{food.caloriesPer100g}<span className="text-[10px] font-medium text-gray-500"> ккал/100г</span></div>
+                    <div className="text-[11px] text-gray-500 mt-0.5">
+                        Б {food.proteinPer100g} · Ж {food.fatsPer100g} · В {food.carbsPer100g}
                     </div>
                 </div>
             </div>
-        </div>
+            {badge}
+        </button>
     );
+
+    const inputCls = "w-full px-3.5 py-2.5 bg-white border border-cream-200 rounded-xl text-sm shadow-sm focus:outline-none focus:border-brand-400 focus:ring-4 focus:ring-brand-100 transition-all";
 
     return (
         <>
-        <div style={{
-            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex',
-            alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px'
-        }}>
-            <div style={{
-                backgroundColor: 'white', borderRadius: '12px', width: '100%',
-                maxWidth: '600px', maxHeight: '90vh', overflow: 'hidden',
-                boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', display: 'flex', flexDirection: 'column'
-            }}>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center z-[100] p-0 sm:p-4">
+            <div className="bg-white rounded-t-3xl sm:rounded-3xl shadow-lifted w-full sm:max-w-xl max-h-[100dvh] sm:max-h-[90vh] flex flex-col overflow-hidden">
                 {/* Header */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid #e5e7eb' }}>
-                    <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '600', color: '#1f2937' }}>
-                        Додати до: {getMealTypeName(mealType)}
-                    </h2>
-                    <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6b7280' }}>
-                        <Icon name="close" size={20} color="gray" />
+                <div className="px-5 py-4 border-b border-cream-200 bg-gradient-to-r from-cream-50 to-white flex justify-between items-center flex-shrink-0">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="w-1 h-5 rounded-full bg-brand-gradient flex-shrink-0" />
+                        <h2 className="text-base sm:text-lg font-bold text-gray-900 truncate">
+                            Додати до: <span className="text-gradient-brand">{getMealTypeName(mealType)}</span>
+                        </h2>
+                    </div>
+                    <button
+                        onClick={onClose}
+                        className="p-1.5 rounded-xl hover:bg-cream-100 transition-colors flex-shrink-0"
+                        aria-label="Закрити"
+                    >
+                        <Icon name="close" size={18} color="gray" />
                     </button>
                 </div>
 
                 {/* Tabs */}
-                <div style={{ display: 'flex', padding: '12px 24px 0', gap: '8px', borderBottom: '1px solid #e5e7eb' }}>
-                    {(['external', 'my-foods'] as SearchTab[]).map(tab => (
-                        <button key={tab} onClick={() => setActiveTab(tab)} style={{
-                            padding: '8px 16px', border: 'none', cursor: 'pointer', borderRadius: '6px 6px 0 0',
-                            fontSize: '13px', fontWeight: '500',
-                            backgroundColor: activeTab === tab ? '#3b82f6' : '#f3f4f6',
-                            color: activeTab === tab ? 'white' : '#6b7280',
-                        }}>
-                            {tab === 'external' ? '🔍 Пошук' : '👤 Мої продукти'}
-                        </button>
-                    ))}
+                <div className="px-5 pt-3 pb-2 border-b border-cream-200 flex gap-2 flex-shrink-0">
+                    {(['external', 'my-foods'] as SearchTab[]).map(tab => {
+                        const active = activeTab === tab;
+                        return (
+                            <button
+                                key={tab}
+                                onClick={() => setActiveTab(tab)}
+                                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+                                    active
+                                        ? 'bg-brand-gradient text-white shadow-pop'
+                                        : 'bg-cream-100 text-gray-600 hover:bg-cream-200'
+                                }`}
+                            >
+                                <Icon name={tab === 'external' ? 'search' : 'profile'} size={14} color={active ? 'white' : 'gray'} />
+                                <span>{tab === 'external' ? 'Пошук у базі' : 'Мої продукти'}</span>
+                            </button>
+                        );
+                    })}
                 </div>
 
-                {/* Body */}
-                <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
+                {/* Body — scrollable */}
+                <div className="flex-1 overflow-y-auto px-5 py-4">
 
                     {/* ── External search ── */}
                     {activeTab === 'external' && (
                         <div>
-                            <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-                                <div style={{ position: 'relative', flex: 1 }}>
-                                    <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }}>
+                            <div className="flex gap-2 mb-2">
+                                <div className="relative flex-1">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
                                         <Icon name="search" size={16} color="gray" />
                                     </span>
                                     <input
@@ -283,46 +289,40 @@ const AddFoodModal = ({ date, mealType, onClose, onFoodAdded }: AddFoodModalProp
                                         placeholder="Введіть назву продукту..."
                                         value={extQuery}
                                         onChange={e => { setExtQuery(e.target.value); setSelectedFood(null); }}
-                                        style={{
-                                            width: '100%', paddingLeft: '36px', padding: '10px 10px 10px 36px',
-                                            border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px',
-                                            boxSizing: 'border-box', outline: 'none'
-                                        }}
-                                        onFocus={e => e.currentTarget.style.borderColor = '#3b82f6'}
-                                        onBlur={e => e.currentTarget.style.borderColor = '#d1d5db'}
+                                        className={`${inputCls} pl-10`}
                                     />
                                 </div>
                                 <button
                                     onClick={() => setShowScanner(true)}
                                     title="Сканувати штрих-код"
-                                    style={{
-                                        padding: '10px 14px', backgroundColor: '#f3f4f6',
-                                        border: '1px solid #d1d5db', borderRadius: '8px',
-                                        cursor: 'pointer', fontSize: '20px', lineHeight: 1,
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        flexShrink: 0
-                                    }}
+                                    className="px-3.5 py-2.5 bg-white border border-cream-200 rounded-xl shadow-sm hover:border-brand-300 hover:bg-cream-50 transition-all flex items-center justify-center flex-shrink-0"
+                                    aria-label="Сканувати штрих-код"
                                 >
-                                    📷
+                                    <Icon name="barcode" size={20} color="gray" />
                                 </button>
                             </div>
                             {barcodeLoading && (
-                                <div style={{ textAlign: 'center', padding: '12px 0', color: '#6b7280', fontSize: '14px' }}>
+                                <div className="text-center py-3 text-gray-500 text-sm flex items-center justify-center gap-2">
+                                    <span className="w-3 h-3 border-2 border-brand-300 border-t-brand-500 rounded-full animate-spin" />
                                     Шукаємо продукт за штрих-кодом...
                                 </div>
                             )}
-                            <p style={{ fontSize: '11px', color: '#9ca3af', marginBottom: '12px' }}>
+                            <p className="text-[11px] text-gray-400 mb-3 leading-snug">
                                 Наприклад: «milk», «apple», «chicken», «oatmeal». Локальних укр. брендів поки немає — додавайте їх вручну у вкладці «Мої продукти».
                             </p>
 
                             {extLoading ? (
-                                <div style={{ textAlign: 'center', padding: '32px 0', color: '#6b7280' }}>Пошук...</div>
+                                <div className="text-center py-8 text-gray-500 text-sm flex items-center justify-center gap-2">
+                                    <span className="w-4 h-4 border-2 border-brand-300 border-t-brand-500 rounded-full animate-spin" />
+                                    Пошук...
+                                </div>
                             ) : extError ? (
-                                <div style={{ textAlign: 'center', padding: '16px', color: '#dc2626', fontSize: '13px', backgroundColor: '#fef2f2', borderRadius: '8px' }}>
-                                    {extError}
+                                <div className="px-4 py-3 text-red-700 text-sm bg-red-50 border border-red-200 rounded-xl flex items-start gap-2">
+                                    <Icon name="warning" size={16} color="red" />
+                                    <span>{extError}</span>
                                 </div>
                             ) : extResults.length > 0 ? (
-                                <div style={{ maxHeight: '260px', overflowY: 'auto' }}>
+                                <div className="space-y-2">
                                     {extResults.map(food => (
                                         <FoodRow
                                             key={`${food.source}:${food.externalId}`}
@@ -333,11 +333,14 @@ const AddFoodModal = ({ date, mealType, onClose, onFoodAdded }: AddFoodModalProp
                                     ))}
                                 </div>
                             ) : extQuery && !extLoading ? (
-                                <div style={{ textAlign: 'center', padding: '32px 0', color: '#6b7280', fontSize: '14px' }}>
+                                <div className="text-center py-10 text-gray-500 text-sm">
                                     Нічого не знайдено. Спробуйте іншу назву.
                                 </div>
                             ) : (
-                                <div style={{ textAlign: 'center', padding: '32px 0', color: '#9ca3af', fontSize: '14px' }}>
+                                <div className="text-center py-10 text-gray-400 text-sm">
+                                    <div className="mb-2 flex justify-center opacity-60">
+                                        <Icon name="search" size={40} color="gray" />
+                                    </div>
                                     Введіть назву продукту для пошуку
                                 </div>
                             )}
@@ -347,7 +350,7 @@ const AddFoodModal = ({ date, mealType, onClose, onFoodAdded }: AddFoodModalProp
                     {/* ── My foods ── */}
                     {activeTab === 'my-foods' && (
                         <div>
-                            <p style={{ fontSize: '11px', color: '#9ca3af', marginBottom: '10px' }}>
+                            <p className="text-[11px] text-gray-400 mb-3 leading-snug">
                                 Власні продукти — видимі тільки вам. Створити можна у розділі «Мої продукти».
                             </p>
                             <input
@@ -355,37 +358,34 @@ const AddFoodModal = ({ date, mealType, onClose, onFoodAdded }: AddFoodModalProp
                                 placeholder="Пошук серед моїх продуктів..."
                                 value={myFoodsQuery}
                                 onChange={e => setMyFoodsQuery(e.target.value)}
-                                style={{
-                                    width: '100%', padding: '10px 12px', border: '1px solid #d1d5db',
-                                    borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box',
-                                    outline: 'none', marginBottom: '12px'
-                                }}
-                                onFocus={e => e.currentTarget.style.borderColor = '#3b82f6'}
-                                onBlur={e => e.currentTarget.style.borderColor = '#d1d5db'}
+                                className={`${inputCls} mb-3`}
                             />
                             {myFoodsLoading ? (
-                                <div style={{ textAlign: 'center', padding: '32px 0', color: '#6b7280' }}>Завантаження...</div>
+                                <div className="text-center py-8 text-gray-500 text-sm flex items-center justify-center gap-2">
+                                    <span className="w-4 h-4 border-2 border-brand-300 border-t-brand-500 rounded-full animate-spin" />
+                                    Завантаження...
+                                </div>
                             ) : filteredMyFoods.length > 0 ? (
-                                <div style={{ maxHeight: '260px', overflowY: 'auto' }}>
+                                <div className="space-y-2">
                                     {filteredMyFoods.map(food => (
-                                        <div key={food.id} style={{ position: 'relative' }}>
-                                            <FoodRow
-                                                food={food as any}
-                                                isSelected={selectedFood?.name === food.name && selectedFood?.source === 'Custom'}
-                                                onClick={() => selectLocal(food)}
-                                            />
-                                            <span style={{
-                                                position: 'absolute', top: '8px', right: '8px',
-                                                fontSize: '10px', padding: '2px 6px', borderRadius: '999px',
-                                                backgroundColor: '#f3e8ff', color: '#7e22ce', fontWeight: 600
-                                            }}>
-                                                Мій продукт
-                                            </span>
-                                        </div>
+                                        <FoodRow
+                                            key={food.id}
+                                            food={food as any}
+                                            isSelected={selectedFood?.name === food.name && selectedFood?.source === 'Custom'}
+                                            onClick={() => selectLocal(food)}
+                                            badge={
+                                                <span className="absolute top-2 right-2 text-[9px] font-bold tracking-wide px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 uppercase">
+                                                    Мій
+                                                </span>
+                                            }
+                                        />
                                     ))}
                                 </div>
                             ) : (
-                                <div style={{ textAlign: 'center', padding: '32px 0', color: '#9ca3af', fontSize: '14px' }}>
+                                <div className="text-center py-10 text-gray-400 text-sm">
+                                    <div className="mb-2 flex justify-center opacity-60">
+                                        <Icon name="empty-plate" size={40} color="gray" />
+                                    </div>
                                     {myFoods.length === 0 ? 'У вас ще немає власних продуктів.' : 'Нічого не знайдено.'}
                                 </div>
                             )}
@@ -394,44 +394,39 @@ const AddFoodModal = ({ date, mealType, onClose, onFoodAdded }: AddFoodModalProp
 
                     {/* ── Selected food + quantity ── */}
                     {selectedFood && (
-                        <div style={{ marginTop: '20px', borderTop: '1px solid #e5e7eb', paddingTop: '20px' }}>
-                            <div style={{ backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px' }}>
-                                <div style={{ fontWeight: '600', color: '#1e40af', marginBottom: '2px' }}>{selectedFood.name}</div>
-                                {selectedFood.brand && <div style={{ fontSize: '12px', color: '#6b7280' }}>{selectedFood.brand}</div>}
-                                <div style={{ fontSize: '13px', color: '#374151', marginTop: '4px' }}>{selectedFood.caloriesPer100g} ккал на 100г</div>
+                        <div className="mt-5 pt-5 border-t border-cream-200">
+                            <div className="bg-gradient-to-br from-brand-50 to-cream-50 border border-brand-200 rounded-2xl px-4 py-3 mb-4">
+                                <div className="font-bold text-brand-700">{selectedFood.name}</div>
+                                {selectedFood.brand && <div className="text-xs text-gray-500 mt-0.5">{selectedFood.brand}</div>}
+                                <div className="text-xs text-gray-700 mt-1">{selectedFood.caloriesPer100g} ккал на 100г</div>
                             </div>
 
-                            <div style={{ marginBottom: '16px' }}>
-                                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>
+                            <div className="mb-4">
+                                <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
                                     Кількість (грам)
                                 </label>
                                 <input
                                     type="number" min="1" step="0.1" value={quantity}
                                     onChange={e => setQuantity(e.target.value)}
-                                    style={{
-                                        width: '100%', padding: '10px 12px', border: '1px solid #d1d5db',
-                                        borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box', outline: 'none'
-                                    }}
-                                    onFocus={e => e.currentTarget.style.borderColor = '#3b82f6'}
-                                    onBlur={e => e.currentTarget.style.borderColor = '#d1d5db'}
+                                    className={inputCls}
                                 />
                             </div>
 
                             {nutrition && (
-                                <div style={{ backgroundColor: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '12px' }}>
-                                    <div style={{ fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '10px' }}>
+                                <div className="bg-cream-50 border border-cream-200 rounded-2xl p-3">
+                                    <div className="text-xs font-semibold text-gray-600 mb-2 tracking-wide uppercase">
                                         Харчова цінність ({quantity}г)
                                     </div>
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', fontSize: '13px' }}>
+                                    <div className="grid grid-cols-4 gap-2 text-xs">
                                         {[
-                                            { label: 'Калорії', value: nutrition.calories, unit: 'ккал', color: '#1f2937' },
-                                            { label: 'Білки',   value: nutrition.protein,  unit: 'г',    color: '#059669' },
-                                            { label: 'Жири',    value: nutrition.fats,     unit: 'г',    color: '#d97706' },
-                                            { label: 'Вуглев.', value: nutrition.carbs,    unit: 'г',    color: '#dc2626' },
-                                        ].map(({ label, value, unit, color }) => (
-                                            <div key={label} style={{ textAlign: 'center', backgroundColor: 'white', borderRadius: '6px', padding: '8px 4px' }}>
-                                                <div style={{ color: '#6b7280', fontSize: '11px' }}>{label}</div>
-                                                <div style={{ fontWeight: '600', color }}>{value}{unit}</div>
+                                            { label: 'Калорії', value: nutrition.calories, unit: 'ккал', tone: 'text-gray-900' },
+                                            { label: 'Білки',   value: nutrition.protein,  unit: 'г',    tone: 'text-fresh-600' },
+                                            { label: 'Жири',    value: nutrition.fats,     unit: 'г',    tone: 'text-sun-600' },
+                                            { label: 'Вугл.',   value: nutrition.carbs,    unit: 'г',    tone: 'text-berry-600' },
+                                        ].map(({ label, value, unit, tone }) => (
+                                            <div key={label} className="text-center bg-white rounded-xl px-1.5 py-2 shadow-sm">
+                                                <div className="text-[10px] text-gray-500">{label}</div>
+                                                <div className={`font-bold mt-0.5 ${tone}`}>{value}<span className="text-[9px] font-medium ml-0.5">{unit}</span></div>
                                             </div>
                                         ))}
                                     </div>
@@ -441,31 +436,23 @@ const AddFoodModal = ({ date, mealType, onClose, onFoodAdded }: AddFoodModalProp
                     )}
                 </div>
 
-                {/* Footer */}
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', padding: '16px 24px', borderTop: '1px solid #e5e7eb', backgroundColor: '#f9fafb' }}>
-                    <button onClick={onClose} style={{
-                        padding: '10px 20px', backgroundColor: '#f3f4f6', color: '#374151',
-                        border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px',
-                        fontWeight: '500', display: 'flex', alignItems: 'center', gap: '8px'
-                    }}>
+                {/* Footer — sticky */}
+                <div className="px-5 py-3 border-t border-cream-200 bg-cream-50/80 backdrop-blur flex flex-col-reverse sm:flex-row sm:justify-end gap-2 flex-shrink-0">
+                    <button
+                        onClick={onClose}
+                        className="px-4 py-2.5 bg-white border border-cream-300 text-gray-700 rounded-xl font-semibold text-sm hover:bg-cream-50 transition-colors flex items-center justify-center gap-2"
+                    >
                         <Icon name="cancel" size={16} color="gray" />
-                        Скасувати
+                        <span>Скасувати</span>
                     </button>
                     <button
                         onClick={handleAddFood}
                         disabled={!selectedFood || !quantity || addingFood}
-                        style={{
-                            padding: '10px 20px',
-                            backgroundColor: (!selectedFood || !quantity || addingFood) ? '#9ca3af' : '#3b82f6',
-                            color: 'white', border: 'none', borderRadius: '6px',
-                            cursor: (!selectedFood || !quantity || addingFood) ? 'not-allowed' : 'pointer',
-                            fontSize: '14px', fontWeight: '500',
-                            display: 'flex', alignItems: 'center', gap: '8px'
-                        }}
+                        className="px-5 py-2.5 bg-brand-gradient text-white rounded-xl font-semibold text-sm shadow-pop hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:brightness-100 flex items-center justify-center gap-2"
                     >
                         {addingFood ? (
                             <>
-                                <div style={{ width: '14px', height: '14px', border: '2px solid white', borderTop: '2px solid transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+                                <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
                                 Додавання...
                             </>
                         ) : (
@@ -477,8 +464,6 @@ const AddFoodModal = ({ date, mealType, onClose, onFoodAdded }: AddFoodModalProp
                     </button>
                 </div>
             </div>
-
-            <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
         </div>
 
         {showScanner && (

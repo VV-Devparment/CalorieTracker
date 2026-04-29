@@ -120,7 +120,7 @@ class NotificationService {
                     title: 'Нагадування про сніданок',
                     message: 'Не забудьте записати ваш сніданок! Це допоможе краще відстежувати калорії.',
                     isRead: false,
-                    icon: '🌅'
+                    icon: 'sunrise'
                 });
             }
         }
@@ -139,7 +139,7 @@ class NotificationService {
                     title: 'Час для обіду',
                     message: 'Самий час для обіду! Додайте продукти до свого денного раціону.',
                     isRead: false,
-                    icon: '☀️'
+                    icon: 'sun'
                 });
             }
         }
@@ -158,7 +158,7 @@ class NotificationService {
                     title: 'Пізня вечеря',
                     message: 'Увага! Зараз пізно для прийому їжі. Це може вплинути на ваші цілі.',
                     isRead: false,
-                    icon: '⚠️'
+                    icon: 'warning'
                 });
             }
         }
@@ -178,7 +178,7 @@ class NotificationService {
             title: 'Продукт додано',
             message: `Ви додали "${foodName}" до ${mealNames[mealType] || 'прийому їжі'}`,
             isRead: false,
-            icon: '🍽️'
+            icon: 'plate'
         });
     }
 
@@ -189,7 +189,7 @@ class NotificationService {
             title: 'Вага оновлена',
             message: `Ви успішно оновили свою вагу. Нова вага: ${newWeight} кг`,
             isRead: false,
-            icon: '⚖️'
+            icon: 'scale'
         });
     }
 
@@ -200,22 +200,18 @@ class NotificationService {
             title,
             message,
             isRead: false,
-            icon: '🏆'
+            icon: 'trophy'
         });
     }
 
     // Перевірити досягнення (викликати після додавання їжі)
     checkAchievements(): void {
-        // Тут можна додати логіку перевірки різних досягнень
-        // Наприклад, перевірити кількість днів поспіль з записами
-
-        // Поки що просто приклад
         const notifications = this.getNotifications();
         const userActions = notifications.filter(n => n.type === 'user_action');
 
         if (userActions.length === 10) {
             this.onAchievement(
-                'Перші 10 записів! 🎉',
+                'Перші 10 записів!',
                 'Ви зробили вже 10 записів у додатку! Продовжуйте в тому ж дусі!'
             );
         }

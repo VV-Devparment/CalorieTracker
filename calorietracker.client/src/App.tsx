@@ -29,7 +29,14 @@ const PublicRoute = ({ children }: { children: React.ReactNode }) => {
 function App() {
     return (
         <Router>
-            <div className="min-h-screen bg-gray-50">
+            <div className="min-h-screen bg-app-gradient bg-fixed relative">
+                {/* Decorative ambient blobs (behind everything) */}
+                <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+                    <div className="blob blob--orange" style={{ width: 360, height: 360, top: -120, left: -100 }} />
+                    <div className="blob blob--mint" style={{ width: 320, height: 320, top: 80, right: -120, animationDelay: '4s' }} />
+                    <div className="blob blob--berry" style={{ width: 280, height: 280, bottom: -100, left: '40%', animationDelay: '8s' }} />
+                    <div className="blob blob--sun" style={{ width: 220, height: 220, top: '45%', left: -80, animationDelay: '12s' }} />
+                </div>
                 <Routes>
                     <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
                     <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { foodsApi } from '../services/api';
+import Icon from '../components/Icon';
 import type { Food, FoodCreate } from '../types';
 
 const FOOD_CATEGORIES = [
@@ -84,30 +85,45 @@ const FoodFormModal: React.FC<FoodFormModalProps> = ({ title, food, onChange, on
         });
     };
 
+    const inputCls = "w-full px-3.5 py-2.5 bg-white border border-cream-200 rounded-xl text-sm shadow-sm focus:outline-none focus:border-brand-400 focus:ring-4 focus:ring-brand-100 transition-all";
+    const labelCls = "block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide";
+
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-                <div className="p-6 border-b border-gray-200 flex justify-between items-center">
-                    <h2 className="text-xl font-semibold text-gray-900">{title}</h2>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center z-[100] p-0 sm:p-4">
+            <div className="bg-white rounded-t-3xl sm:rounded-3xl shadow-lifted w-full sm:max-w-2xl max-h-[100dvh] sm:max-h-[90vh] flex flex-col overflow-hidden">
+                {/* Header */}
+                <div className="px-5 py-4 border-b border-cream-200 bg-gradient-to-r from-cream-50 to-white flex justify-between items-center flex-shrink-0">
+                    <div className="flex items-center gap-2.5">
+                        <span className="w-1 h-5 rounded-full bg-brand-gradient" />
+                        <h2 className="text-base sm:text-lg font-bold text-gray-900">{title}</h2>
+                    </div>
+                    <button
+                        onClick={onClose}
+                        className="p-1.5 rounded-xl hover:bg-cream-100 transition-colors"
+                        aria-label="Закрити"
+                    >
+                        <Icon name="close" size={18} color="gray" />
+                    </button>
                 </div>
-                <div className="p-6">
+
+                {/* Body — scrollable */}
+                <div className="flex-1 overflow-y-auto px-5 py-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="md:col-span-2">
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Назва *</label>
+                            <label className={labelCls}>Назва *</label>
                             <input name="name" value={food.name} onChange={handleChange}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                className={inputCls}
                                 placeholder="Назва продукту" />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Бренд</label>
+                            <label className={labelCls}>Бренд</label>
                             <input name="brand" value={food.brand || ''} onChange={handleChange}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                                className={inputCls} />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Категорія</label>
+                            <label className={labelCls}>Категорія</label>
                             <select name="category" value={food.category || ''} onChange={handleChange}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                className={inputCls}>
                                 <option value="">Без категорії</option>
                                 {FOOD_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                             </select>
@@ -122,29 +138,37 @@ const FoodFormModal: React.FC<FoodFormModalProps> = ({ title, food, onChange, on
                             { name: 'sodiumPer100g',   label: 'Натрій/100г (мг)' },
                         ].map(({ name, label }) => (
                             <div key={name}>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+                                <label className={labelCls}>{label}</label>
                                 <input type="number" name={name}
                                     value={(food as any)[name]} onChange={handleChange} step="0.1"
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                                    className={inputCls} />
                             </div>
                         ))}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Штрих-код</label>
+                            <label className={labelCls}>Штрих-код</label>
                             <input name="barcode" value={food.barcode || ''} onChange={handleChange}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                className={inputCls}
                                 placeholder="12345678901234" />
                         </div>
                     </div>
-                    <div className="flex justify-end gap-3 mt-6">
-                        <button onClick={onClose}
-                            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">
-                            Скасувати
-                        </button>
-                        <button onClick={onSave}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                            Зберегти
-                        </button>
-                    </div>
+                </div>
+
+                {/* Footer — sticky */}
+                <div className="px-5 py-3 border-t border-cream-200 bg-cream-50/80 backdrop-blur flex flex-col-reverse sm:flex-row sm:justify-end gap-2 flex-shrink-0">
+                    <button
+                        onClick={onClose}
+                        className="px-4 py-2.5 bg-white border border-cream-300 text-gray-700 rounded-xl font-semibold text-sm hover:bg-cream-50 transition-colors flex items-center justify-center gap-2"
+                    >
+                        <Icon name="cancel" size={16} color="gray" />
+                        <span>Скасувати</span>
+                    </button>
+                    <button
+                        onClick={onSave}
+                        className="px-5 py-2.5 bg-brand-gradient text-white rounded-xl font-semibold text-sm shadow-pop hover:brightness-110 transition-all flex items-center justify-center gap-2"
+                    >
+                        <Icon name="save" size={16} color="white" />
+                        <span>Зберегти</span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -227,7 +251,7 @@ const Foods: React.FC = () => {
     );
 
     return (
-        <div className="min-h-screen bg-gray-50 py-6">
+        <div className="min-h-screen py-5 pb-24">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
                 {/* Header */}
@@ -272,15 +296,17 @@ const Foods: React.FC = () => {
                                         <div className="flex gap-2">
                                             <button
                                                 onClick={() => { setEditingFood({ ...food }); setShowEditModal(true); }}
-                                                className="flex-1 text-xs py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                                                className="flex-1 text-xs py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center gap-1.5"
                                             >
-                                                ✏️ Редагувати
+                                                <Icon name="edit" size={14} color="gray" />
+                                                <span>Редагувати</span>
                                             </button>
                                             <button
                                                 onClick={() => handleDeleteFood(food)}
-                                                className="flex-1 text-xs py-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
+                                                className="flex-1 text-xs py-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors flex items-center justify-center gap-1.5"
                                             >
-                                                🗑️ Видалити
+                                                <Icon name="delete" size={14} color="red" />
+                                                <span>Видалити</span>
                                             </button>
                                         </div>
                                     }

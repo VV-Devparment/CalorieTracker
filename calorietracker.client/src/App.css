@@ -1,82 +1,221 @@
-﻿@import 'tailwindcss/base';
+@import 'tailwindcss/base';
 @import 'tailwindcss/components';
 @import 'tailwindcss/utilities';
 
-/* Custom styles */
-.container {
-    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+@layer base {
+    body {
+        @apply font-sans text-gray-800 antialiased;
+    }
+    h1, h2, h3, h4 {
+        @apply font-display tracking-tight;
+    }
 }
 
-.btn {
-    @apply px-4 py-2 rounded-md font-medium transition-colors duration-200;
-}
-
-.btn-primary {
-    @apply bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2;
-}
-
-.btn-secondary {
-    @apply bg-gray-200 text-gray-900 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2;
-}
-
-.btn-danger {
-    @apply bg-red-600 text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2;
-}
-
-.btn-success {
-    @apply bg-green-600 text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2;
-}
-
-.input {
-    @apply block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500;
-}
-
-.card {
-    @apply bg-white rounded-lg shadow-md p-6;
-}
-
-.meal-type-breakfast {
-    @apply bg-yellow-100 border-yellow-300;
-}
-
-.meal-type-lunch {
-    @apply bg-green-100 border-green-300;
-}
-
-.meal-type-dinner {
-    @apply bg-blue-100 border-blue-300;
-}
-
-.meal-type-snack {
-    @apply bg-purple-100 border-purple-300;
-}
-
-/* Loading animation */
-.spinner {
-    @apply animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600;
-}
-
-/* Responsive table */
-.table-responsive {
-    @apply min-w-full overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg;
-}
-
-.table {
-    @apply min-w-full divide-y divide-gray-300;
-}
-
-.table-header {
-    @apply bg-gray-50;
-}
-
-    .table-header th {
-        @apply px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider;
+@layer components {
+    .container {
+        @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
     }
 
-.table-body {
-    @apply bg-white divide-y divide-gray-200;
+    /* Cards */
+    .card-glass {
+        @apply bg-white/70 backdrop-blur-xl border border-white/60 shadow-soft rounded-3xl;
+    }
+
+    .card-rich {
+        @apply bg-white border border-cream-200 shadow-soft rounded-3xl relative overflow-hidden;
+    }
+
+    .card-rich::before {
+        content: '';
+        @apply absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white to-transparent pointer-events-none;
+    }
+
+    /* Buttons */
+    .btn {
+        @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm transition-all duration-200 select-none;
+    }
+
+    .btn-primary {
+        @apply bg-brand-gradient text-white shadow-pop hover:brightness-110 hover:-translate-y-0.5 active:translate-y-0 active:brightness-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0;
+    }
+
+    .btn-fresh {
+        @apply bg-fresh-gradient text-white shadow-lifted hover:brightness-110 hover:-translate-y-0.5 active:translate-y-0;
+    }
+
+    .btn-ghost {
+        @apply bg-white/80 text-gray-700 border border-gray-200 hover:bg-white hover:border-brand-300 hover:text-brand-700;
+    }
+
+    .btn-secondary {
+        @apply bg-cream-100 text-gray-700 hover:bg-cream-200;
+    }
+
+    .btn-danger {
+        @apply bg-red-500 text-white hover:bg-red-600 shadow-md;
+    }
+
+    .btn-success {
+        @apply bg-fresh-gradient text-white shadow-md hover:brightness-110;
+    }
+
+    /* Inputs */
+    .input {
+        @apply block w-full px-4 py-2.5 bg-white/80 backdrop-blur border border-cream-200 rounded-xl text-sm placeholder-gray-400 transition-all shadow-sm focus:outline-none focus:border-brand-400 focus:ring-4 focus:ring-brand-100 focus:bg-white;
+    }
+
+    /* Legacy card */
+    .card {
+        @apply bg-white rounded-2xl shadow-soft p-6 border border-cream-200;
+    }
+
+    /* Meal accents */
+    .meal-type-breakfast {
+        @apply bg-sun-50 border-sun-300;
+    }
+    .meal-type-lunch {
+        @apply bg-fresh-50 border-fresh-300;
+    }
+    .meal-type-dinner {
+        @apply bg-blue-50 border-blue-300;
+    }
+    .meal-type-snack {
+        @apply bg-berry-50 border-berry-400;
+    }
+
+    /* Loader */
+    .spinner {
+        @apply animate-spin rounded-full h-8 w-8 border-2 border-brand-200 border-t-brand-500;
+    }
+
+    /* Tables */
+    .table-responsive {
+        @apply min-w-full overflow-hidden shadow-soft ring-1 ring-cream-200 md:rounded-2xl;
+    }
+    .table {
+        @apply min-w-full divide-y divide-cream-200;
+    }
+    .table-header {
+        @apply bg-cream-50;
+    }
+        .table-header th {
+            @apply px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider;
+        }
+    .table-body {
+        @apply bg-white divide-y divide-cream-100;
+    }
+        .table-body td {
+            @apply px-6 py-4 whitespace-nowrap text-sm text-gray-800;
+        }
+
+    /* Decorative chip */
+    .chip {
+        @apply inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold;
+    }
+    .chip-brand {
+        @apply bg-brand-50 text-brand-700;
+    }
+    .chip-fresh {
+        @apply bg-fresh-50 text-fresh-700;
+    }
+    .chip-sun {
+        @apply bg-sun-50 text-sun-600;
+    }
+    .chip-berry {
+        @apply bg-berry-50 text-berry-600;
+    }
+
+    /* Stats tile */
+    .stat-tile {
+        @apply relative overflow-hidden rounded-2xl p-4 shadow-inner-glow;
+    }
+
+    /* Colorful gradient tiles for macro stats */
+    .tile-kcal {
+        @apply relative overflow-hidden rounded-3xl p-4 text-white shadow-pop;
+        background: linear-gradient(135deg, #FF8253 0%, #F0501E 100%);
+    }
+    .tile-protein {
+        @apply relative overflow-hidden rounded-3xl p-4 text-white shadow-lifted;
+        background: linear-gradient(135deg, #34D399 0%, #059669 100%);
+    }
+    .tile-fats {
+        @apply relative overflow-hidden rounded-3xl p-4 text-white shadow-lifted;
+        background: linear-gradient(135deg, #FCD34D 0%, #D97706 100%);
+    }
+    .tile-carbs {
+        @apply relative overflow-hidden rounded-3xl p-4 text-white shadow-lifted;
+        background: linear-gradient(135deg, #F472B6 0%, #DB2777 100%);
+    }
+
+    /* Shimmer overlay on gradient tiles */
+    .tile-kcal::after,
+    .tile-protein::after,
+    .tile-fats::after,
+    .tile-carbs::after {
+        content: '';
+        @apply absolute -top-12 -right-12 w-32 h-32 rounded-full pointer-events-none;
+        background: radial-gradient(circle, rgba(255,255,255,0.45) 0%, transparent 60%);
+    }
+
+    /* Hero card with brand wash */
+    .hero-card {
+        @apply relative overflow-hidden rounded-3xl shadow-lifted text-white;
+        background: linear-gradient(135deg, #FF8253 0%, #F0501E 50%, #C73D14 100%);
+    }
+    .hero-card::before {
+        content: '';
+        @apply absolute -top-20 -right-16 w-64 h-64 rounded-full pointer-events-none;
+        background: radial-gradient(circle, rgba(252, 211, 77, 0.55) 0%, transparent 70%);
+    }
+    .hero-card::after {
+        content: '';
+        @apply absolute -bottom-20 -left-16 w-56 h-56 rounded-full pointer-events-none;
+        background: radial-gradient(circle, rgba(244, 114, 182, 0.45) 0%, transparent 70%);
+    }
+
+    /* Meal-type colored cards (richer than legacy meal-type-*) */
+    .meal-card {
+        @apply relative overflow-hidden rounded-3xl border shadow-soft transition-all hover:shadow-lifted hover:-translate-y-0.5;
+    }
+    .meal-card-breakfast { @apply bg-gradient-to-br from-sun-50 via-white to-cream-100 border-sun-300/60; }
+    .meal-card-lunch     { @apply bg-gradient-to-br from-fresh-50 via-white to-cream-100 border-fresh-300/60; }
+    .meal-card-dinner    { @apply bg-gradient-to-br from-blue-50 via-white to-cream-100 border-blue-300/60; }
+    .meal-card-snack     { @apply bg-gradient-to-br from-berry-50 via-white to-cream-100 border-berry-400/60; }
+
+    .meal-icon-breakfast { background: linear-gradient(135deg, #FCD34D 0%, #D97706 100%); }
+    .meal-icon-lunch     { background: linear-gradient(135deg, #34D399 0%, #059669 100%); }
+    .meal-icon-dinner    { background: linear-gradient(135deg, #60A5FA 0%, #2563EB 100%); }
+    .meal-icon-snack     { background: linear-gradient(135deg, #F472B6 0%, #DB2777 100%); }
+
+    /* Glass bottom nav */
+    .nav-glass {
+        @apply backdrop-blur-xl bg-white/80 border-t border-white/60 shadow-lifted;
+    }
+
+    /* Animated underline pill for nav */
+    .nav-pill-active {
+        background: linear-gradient(135deg, #FF8253 0%, #F0501E 100%);
+        box-shadow: 0 6px 20px -4px rgba(240, 80, 30, 0.5);
+    }
 }
 
-    .table-body td {
-        @apply px-6 py-4 whitespace-nowrap text-sm text-gray-900;
+@layer utilities {
+    .text-gradient-brand {
+        background: linear-gradient(135deg, #FF8253 0%, #F0501E 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
     }
+
+    .text-gradient-fresh {
+        background: linear-gradient(135deg, #34D399 0%, #059669 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+
+    .bg-noise {
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.04 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+}

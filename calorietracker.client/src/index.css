@@ -1,11 +1,8 @@
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
   line-height: 1.5;
   font-weight: 400;
-
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  color: #1f2937;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -13,56 +10,92 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
+* {
+  box-sizing: border-box;
 }
 
 body {
   margin: 0;
-  display: flex;
-  place-items: center;
   min-width: 320px;
   min-height: 100vh;
+  background-color: #FFFBF6;
+  color: #1f2937;
+  overflow-x: hidden;
 }
 
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
+/* Decorative animated blobs (used on auth pages and app background) */
+@keyframes blob-float {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(20px, -30px) scale(1.05); }
+  66% { transform: translate(-15px, 15px) scale(0.95); }
 }
 
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+  opacity: 0.6;
+  pointer-events: none;
+  animation: blob-float 18s ease-in-out infinite;
+}
+
+.blob--orange { background: radial-gradient(circle, #FF8253 0%, transparent 70%); }
+.blob--peach  { background: radial-gradient(circle, #FFC4A8 0%, transparent 70%); }
+.blob--mint   { background: radial-gradient(circle, #6EE7B7 0%, transparent 70%); }
+.blob--sun    { background: radial-gradient(circle, #FCD34D 0%, transparent 70%); }
+.blob--berry  { background: radial-gradient(circle, #F472B6 0%, transparent 70%); }
+.blob--violet { background: radial-gradient(circle, #A78BFA 0%, transparent 70%); }
+
+/* Conic gradient ring for hero stats */
+.kcal-ring-bg {
+  background: conic-gradient(from 0deg, #FF8253 0%, #F0501E 35%, #FCD34D 65%, #FF8253 100%);
+}
+
+/* Soft scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #FFC4A8 0%, #FF8253 100%);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #FF8253 0%, #F0501E 100%);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+}
+
+/* Selection */
+::selection {
+  background: #FFE4D6;
+  color: #7A2A14;
+}
+
+/* Improve form controls */
+input,
+select,
+textarea,
 button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
   font-family: inherit;
-  background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
+/* Focus ring */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #FF8253;
+  outline-offset: 2px;
 }

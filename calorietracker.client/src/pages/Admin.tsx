@@ -12,13 +12,13 @@ import Icon from '../components/Icon';
 
 type Tab = 'overview' | 'users' | 'foods' | 'achievements' | 'logs';
 
-const INPUT_CLS = 'w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500';
+const INPUT_CLS = 'w-full text-sm bg-white border border-cream-200 rounded-xl px-3.5 py-2.5 shadow-sm focus:outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100 transition-all';
 
 const Admin: React.FC = () => {
     const [tab, setTab] = useState<Tab>('overview');
 
     return (
-        <div className="min-h-screen bg-gray-50 pb-10">
+        <div className="min-h-screen pb-24">
             {/* Hero */}
             <div className="bg-gradient-to-r from-orange-500 via-amber-500 to-lime-500 text-white">
                 <div className="max-w-6xl mx-auto px-4 py-6">
@@ -106,7 +106,11 @@ const OverviewTab: React.FC = () => {
     if (error) return <ErrorBox message={error} />;
     if (!stats) return null;
 
-    const maxSignup = Math.max(1, ...stats.signupsLast30Days.map(s => s.count));
+    // Build a continuous 30-day series so the chart shows every day, even those with 0 signups.
+    const signupSeries = buildSignupSeries(stats.signupsLast30Days, 30);
+    const maxSignup = Math.max(1, ...signupSeries.map(s => s.count));
+    const totalSignups = signupSeries.reduce((sum, s) => sum + s.count, 0);
+    const peakDay = signupSeries.reduce((best, s) => s.count > best.count ? s : best, signupSeries[0]);
 
     return (
         <div className="space-y-4">
@@ -132,28 +136,101 @@ const OverviewTab: React.FC = () => {
 
             {/* Signups chart */}
             <div className="bg-white rounded-2xl shadow-sm p-5">
-                <h2 className="text-base font-bold text-gray-900 mb-3">Реєстрації за 30 днів</h2>
-                {stats.signupsLast30Days.length === 0 ? (
-                    <p className="text-sm text-gray-500">Немає нових реєстрацій</p>
+                <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 mb-4">
+                    <div>
+                        <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
+                            <span className="w-1 h-5 rounded-full bg-gradient-to-b from-orange-500 to-lime-500" />
+                            Реєстрації за 30 днів
+                        </h2>
+                        <p className="text-xs text-gray-500 mt-0.5">Всього: <span className="font-bold text-gray-900">{totalSignups}</span> · Пік: <span className="font-bold text-gray-900">{peakDay.count}</span> ({formatShortDay(peakDay.date)})</p>
+                    </div>
+                    <div className="flex items-center gap-3 text-[11px] text-gray-500">
+                        <span className="flex items-center gap-1.5">
+                            <span className="w-3 h-3 rounded-sm bg-gradient-to-t from-orange-500 to-lime-500" />
+                            Реєстрації
+                        </span>
+                    </div>
+                </div>
+                {totalSignups === 0 ? (
+                    <div className="text-center py-10 text-sm text-gray-500 bg-cream-50/40 rounded-xl border border-dashed border-cream-300">
+                        За останні 30 днів нових реєстрацій не було
+                    </div>
                 ) : (
-                    <div className="flex items-end gap-1 h-40">
-                        {stats.signupsLast30Days.map(s => (
-                            <div
-                                key={s.date}
-                                className="flex-1 bg-gradient-to-t from-orange-500 to-lime-500 rounded-t hover:opacity-80 transition-opacity relative group"
-                                style={{ height: `${(s.count / maxSignup) * 100}%`, minHeight: '4px' }}
-                                title={`${s.date}: ${s.count}`}
-                            >
-                                <span className="hidden group-hover:block absolute -top-7 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[10px] px-2 py-1 rounded whitespace-nowrap">
-                                    {s.date}: {s.count}
-                                </span>
+                    <div>
+                        <div className="relative h-44 flex items-end gap-[3px] px-1 border-b border-cream-200">
+                            {/* Y-axis grid lines */}
+                            <div className="absolute inset-x-0 inset-y-0 pointer-events-none flex flex-col justify-between">
+                                {[0, 1, 2, 3].map(i => (
+                                    <div key={i} className="border-t border-dashed border-cream-200/80 h-0" />
+                                ))}
                             </div>
-                        ))}
+                            {/* Y-axis labels */}
+                            <div className="absolute -left-1 top-0 bottom-0 flex flex-col justify-between text-[9px] font-semibold text-gray-400 -translate-x-full pr-1">
+                                <span>{maxSignup}</span>
+                                <span>{Math.round(maxSignup * 0.66)}</span>
+                                <span>{Math.round(maxSignup * 0.33)}</span>
+                                <span>0</span>
+                            </div>
+                            {/* Bars */}
+                            {signupSeries.map(s => {
+                                const heightPct = (s.count / maxSignup) * 100;
+                                const isPeak = s.count > 0 && s.count === peakDay.count;
+                                return (
+                                    <div
+                                        key={s.date}
+                                        className="flex-1 h-full flex items-end relative group min-w-0"
+                                    >
+                                        <div
+                                            className={`w-full rounded-t-md transition-all duration-150 ${
+                                                s.count === 0
+                                                    ? 'bg-cream-200 group-hover:bg-cream-300'
+                                                    : isPeak
+                                                        ? 'bg-gradient-to-t from-orange-600 via-amber-500 to-lime-500 shadow-sm'
+                                                        : 'bg-gradient-to-t from-orange-500 to-lime-500 group-hover:brightness-110'
+                                            }`}
+                                            style={{ height: s.count === 0 ? '3px' : `${Math.max(heightPct, 4)}%` }}
+                                        />
+                                        <div className="hidden group-hover:flex absolute -top-9 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[10px] px-2 py-1 rounded-lg whitespace-nowrap shadow-lg z-10 flex-col items-center">
+                                            <span className="font-bold">{s.count}</span>
+                                            <span className="text-gray-300 text-[9px]">{formatShortDay(s.date)}</span>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                        {/* X-axis labels: show every ~5th day */}
+                        <div className="flex justify-between mt-1.5 px-1 text-[9px] font-semibold text-gray-400">
+                            {[0, Math.floor(signupSeries.length * 0.25), Math.floor(signupSeries.length * 0.5), Math.floor(signupSeries.length * 0.75), signupSeries.length - 1].map(idx => (
+                                <span key={idx}>{formatShortDay(signupSeries[idx].date)}</span>
+                            ))}
+                        </div>
                     </div>
                 )}
             </div>
         </div>
     );
+};
+
+const buildSignupSeries = (data: { date: string; count: number }[], days: number): { date: string; count: number }[] => {
+    const map = new Map(data.map(d => [d.date.slice(0, 10), d.count]));
+    const out: { date: string; count: number }[] = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    for (let i = days - 1; i >= 0; i--) {
+        const d = new Date(today);
+        d.setDate(today.getDate() - i);
+        const iso = d.toISOString().slice(0, 10);
+        out.push({ date: iso, count: map.get(iso) ?? 0 });
+    }
+    return out;
+};
+
+const formatShortDay = (iso: string): string => {
+    try {
+        return new Date(iso).toLocaleDateString('uk-UA', { day: 'numeric', month: 'short' });
+    } catch {
+        return iso;
+    }
 };
 
 const StatCard: React.FC<{
@@ -487,23 +564,23 @@ const UserDetailsModal: React.FC<{
 
                     {!user.isBlocked && (
                         <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">Причина блокування (необов'язково)</label>
+                            <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">Причина блокування (необов'язково)</label>
                             <input
                                 value={reason}
                                 onChange={e => setReason(e.target.value)}
-                                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                className={INPUT_CLS}
                                 placeholder="Спам, порушення правил..."
                                 maxLength={500}
                             />
                         </div>
                     )}
 
-                    <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100">
+                    <div className="flex flex-wrap gap-2 pt-3 border-t border-cream-200">
                         {user.isBlocked ? (
                             <button
                                 onClick={handleUnblock}
                                 disabled={busy}
-                                className="flex-1 px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 disabled:opacity-50"
+                                className="flex-1 px-4 py-2.5 bg-fresh-gradient text-white text-sm font-semibold rounded-xl shadow-pop hover:brightness-110 transition-all disabled:opacity-50"
                             >
                                 Розблокувати
                             </button>
@@ -511,7 +588,7 @@ const UserDetailsModal: React.FC<{
                             <button
                                 onClick={handleBlock}
                                 disabled={busy}
-                                className="flex-1 px-4 py-2 bg-orange-500 text-white text-sm font-medium rounded-lg hover:bg-orange-600 disabled:opacity-50"
+                                className="flex-1 px-4 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 text-white text-sm font-semibold rounded-xl shadow-pop hover:brightness-110 transition-all disabled:opacity-50"
                             >
                                 Заблокувати
                             </button>
@@ -519,7 +596,7 @@ const UserDetailsModal: React.FC<{
                         <button
                             onClick={handleDelete}
                             disabled={busy}
-                            className="flex-1 px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 disabled:opacity-50"
+                            className="flex-1 px-4 py-2.5 bg-gradient-to-r from-red-500 to-rose-600 text-white text-sm font-semibold rounded-xl shadow-pop hover:brightness-110 transition-all disabled:opacity-50"
                         >
                             Видалити
                         </button>
@@ -738,10 +815,14 @@ const FoodEditModal: React.FC<{
                 </div>
                 <Field label="Категорія"><input className={INPUT_CLS} value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} /></Field>
                 <Field label="Штрих-код"><input className={INPUT_CLS} value={form.barcode} onChange={e => setForm({ ...form, barcode: e.target.value })} /></Field>
-                <div className="flex gap-2 pt-2 border-t border-gray-100">
-                    <button onClick={onClose} className="flex-1 px-4 py-2 border border-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50">Скасувати</button>
-                    <button onClick={handleSave} disabled={busy} className="flex-1 px-4 py-2 bg-orange-500 text-white text-sm font-medium rounded-lg hover:bg-orange-600 disabled:opacity-50">
-                        {busy ? 'Збереження...' : 'Зберегти'}
+                <div className="flex gap-2 pt-3 border-t border-cream-200">
+                    <button onClick={onClose} className="flex-1 px-4 py-2.5 bg-white border border-cream-300 text-gray-700 text-sm font-semibold rounded-xl hover:bg-cream-50 transition-colors flex items-center justify-center gap-2">
+                        <Icon name="cancel" size={16} color="gray" />
+                        <span>Скасувати</span>
+                    </button>
+                    <button onClick={handleSave} disabled={busy} className="flex-1 px-4 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 text-white text-sm font-semibold rounded-xl shadow-pop hover:brightness-110 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
+                        <Icon name="save" size={16} color="white" />
+                        <span>{busy ? 'Збереження...' : 'Зберегти'}</span>
                     </button>
                 </div>
             </div>
@@ -1053,15 +1134,18 @@ const Modal: React.FC<{
     }, [onClose]);
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/50" onClick={onClose}>
-            <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-                <div className="sticky top-0 bg-white px-5 py-3 border-b border-gray-100 flex items-center justify-between">
-                    <h3 className="font-semibold text-gray-900">{title}</h3>
-                    <button onClick={onClose} className="p-1 rounded hover:bg-gray-100">
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
+            <div className="bg-white rounded-t-3xl sm:rounded-3xl shadow-lifted max-w-lg w-full max-h-[100dvh] sm:max-h-[90vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+                <div className="px-5 py-4 bg-gradient-to-r from-cream-50 to-white border-b border-cream-200 flex items-center justify-between flex-shrink-0">
+                    <div className="flex items-center gap-2.5">
+                        <span className="w-1 h-5 rounded-full bg-gradient-to-b from-orange-500 to-lime-500" />
+                        <h3 className="font-bold text-gray-900">{title}</h3>
+                    </div>
+                    <button onClick={onClose} className="p-1.5 rounded-xl hover:bg-cream-100 transition-colors" aria-label="Закрити">
                         <Icon name="close" size={18} color="gray" />
                     </button>
                 </div>
-                <div className="p-5">{children}</div>
+                <div className="flex-1 overflow-y-auto p-5">{children}</div>
             </div>
         </div>
     );

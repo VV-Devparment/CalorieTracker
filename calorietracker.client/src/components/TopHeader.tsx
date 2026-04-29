@@ -94,13 +94,13 @@ const TopHeader = () => {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    const getNotificationColor = (type: Notification['type']) => {
+    const getNotificationStyle = (type: Notification['type']) => {
         switch (type) {
-            case 'user_action': return 'border-l-blue-500 bg-blue-50';
-            case 'app_reminder': return 'border-l-green-500 bg-green-50';
-            case 'achievement': return 'border-l-yellow-500 bg-yellow-50';
-            case 'warning': return 'border-l-red-500 bg-red-50';
-            default: return 'border-l-gray-500 bg-gray-50';
+            case 'user_action': return { border: 'border-l-blue-500', accent: 'from-blue-400 to-blue-500', color: 'blue' as const };
+            case 'app_reminder': return { border: 'border-l-fresh-500', accent: 'from-fresh-400 to-fresh-600', color: 'green' as const };
+            case 'achievement': return { border: 'border-l-sun-500', accent: 'from-sun-400 to-sun-600', color: 'yellow' as const };
+            case 'warning': return { border: 'border-l-red-500', accent: 'from-red-400 to-rose-500', color: 'red' as const };
+            default: return { border: 'border-l-gray-400', accent: 'from-gray-400 to-gray-500', color: 'gray' as const };
         }
     };
 
@@ -121,13 +121,21 @@ const TopHeader = () => {
     const unreadCount = notifications.filter(n => !n.isRead).length;
 
     return (
-        <div className="sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm">
+        <div className="sticky top-0 z-40 backdrop-blur-xl bg-white/70 border-b border-white/60 shadow-soft">
             <div className="max-w-md mx-auto px-4 py-3">
                 <div className="flex items-center justify-between">
                     {/* App Logo/Title */}
-                    <div className="flex items-center space-x-2">
-                        <img src="/logo.png" alt="CalorieTracker" className="w-8 h-8 object-contain" />
-                        <h1 className="text-lg font-bold text-gray-900">CalorieTracker</h1>
+                    <div className="flex items-center space-x-2.5">
+                        <div className="relative w-10 h-10 rounded-2xl bg-brand-gradient shadow-pop flex items-center justify-center">
+                            <img src="/logo.png" alt="CalorieTracker" className="w-7 h-7 object-contain drop-shadow" />
+                            <span className="absolute -inset-0.5 rounded-2xl bg-brand-gradient blur opacity-40 -z-10"></span>
+                        </div>
+                        <div className="leading-tight">
+                            <h1 className="text-base font-extrabold text-gray-900 tracking-tight">
+                                Calorie<span className="text-gradient-brand">Tracker</span>
+                            </h1>
+                            <p className="text-[10px] text-gray-500 -mt-0.5 font-medium">смачно. свідомо. щодня.</p>
+                        </div>
                     </div>
 
                     {/* Right side buttons */}
@@ -135,12 +143,12 @@ const TopHeader = () => {
                         {/* Notifications */}
                         <div className="relative">
                             <button
-                                className="notifications-button relative p-2 rounded-full hover:bg-gray-100 transition-colors"
+                                className="notifications-button relative p-2.5 rounded-2xl bg-white/80 border border-cream-200 hover:border-brand-300 hover:bg-white transition-all shadow-sm"
                                 onClick={() => setShowNotifications(!showNotifications)}
                             >
                                 <Icon name="notification" size={20} color="gray" />
                                 {unreadCount > 0 && (
-                                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-medium">
+                                    <span className="absolute -top-1 -right-1 bg-gradient-to-br from-red-500 to-rose-600 text-white text-[10px] rounded-full h-5 w-5 flex items-center justify-center font-bold shadow-md ring-2 ring-white">
                                         {unreadCount > 9 ? '9+' : unreadCount}
                                     </span>
                                 )}
@@ -148,67 +156,84 @@ const TopHeader = () => {
 
                             {/* Notifications Dropdown */}
                             {showNotifications && (
-                                <div className="notifications-dropdown absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 max-h-96 overflow-hidden z-50">
-                                    <div className="p-4 border-b border-gray-100">
+                                <div className="notifications-dropdown absolute right-0 mt-2 w-[22rem] max-w-[calc(100vw-1.5rem)] bg-white/95 backdrop-blur-xl rounded-3xl shadow-lifted border border-cream-200 overflow-hidden z-50">
+                                    <div className="px-4 py-3 border-b border-cream-200 bg-gradient-to-r from-cream-50 to-white">
                                         <div className="flex items-center justify-between">
-                                            <h3 className="font-semibold text-gray-900">Повідомлення</h3>
-                                            <div className="flex space-x-2">
+                                            <div className="flex items-center gap-2">
+                                                <span className="w-1 h-4 rounded-full bg-brand-gradient" />
+                                                <h3 className="font-bold text-gray-900 text-sm uppercase tracking-wide">Повідомлення</h3>
+                                                {unreadCount > 0 && (
+                                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-brand-gradient text-white">
+                                                        {unreadCount}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                        {(unreadCount > 0 || notifications.length > 0) && (
+                                            <div className="flex gap-2 mt-2">
                                                 {unreadCount > 0 && (
                                                     <button
                                                         onClick={markAllAsRead}
-                                                        className="text-xs text-blue-600 hover:text-blue-800"
+                                                        className="text-[11px] font-semibold text-brand-600 hover:text-brand-700 px-2 py-1 rounded-lg hover:bg-brand-50 transition-colors"
                                                     >
-                                                        Позначити всі як прочитані
+                                                        Прочитати всі
                                                     </button>
                                                 )}
                                                 {notifications.length > 0 && (
                                                     <button
                                                         onClick={clearAllNotifications}
-                                                        className="text-xs text-red-600 hover:text-red-800"
+                                                        className="text-[11px] font-semibold text-red-600 hover:text-red-700 px-2 py-1 rounded-lg hover:bg-red-50 transition-colors"
                                                     >
-                                                        Очистити всі
+                                                        Очистити
                                                     </button>
                                                 )}
                                             </div>
-                                        </div>
+                                        )}
                                     </div>
 
-                                    <div className="max-h-64 overflow-y-auto">
+                                    <div className="max-h-80 overflow-y-auto">
                                         {notifications.length > 0 ? (
-                                            notifications.map((notification) => (
-                                                <div
-                                                    key={notification.id}
-                                                    className={`p-4 border-l-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50 ${getNotificationColor(notification.type)} ${!notification.isRead ? 'bg-opacity-100' : 'bg-opacity-50'
-                                                        }`}
-                                                    onClick={() => markAsRead(notification.id)}
-                                                >
-                                                    <div className="flex items-start space-x-3">
-                                                        <span className="text-xl">{notification.icon}</span>
-                                                        <div className="flex-1 min-w-0">
-                                                            <div className="flex items-center justify-between">
-                                                                <p className={`text-sm font-medium ${!notification.isRead ? 'text-gray-900' : 'text-gray-600'}`}>
-                                                                    {notification.title}
-                                                                </p>
-                                                                {!notification.isRead && (
-                                                                    <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
-                                                                )}
+                                            <ul className="divide-y divide-cream-100">
+                                                {notifications.map((notification) => {
+                                                    const style = getNotificationStyle(notification.type);
+                                                    return (
+                                                        <li
+                                                            key={notification.id}
+                                                            className={`p-3 border-l-4 ${style.border} cursor-pointer hover:bg-cream-50 transition-colors ${!notification.isRead ? 'bg-white' : 'bg-cream-50/30'}`}
+                                                            onClick={() => markAsRead(notification.id)}
+                                                        >
+                                                            <div className="flex items-start gap-3">
+                                                                <span className={`flex-shrink-0 w-9 h-9 rounded-2xl bg-gradient-to-br ${style.accent} flex items-center justify-center shadow-sm`}>
+                                                                    <Icon name={notification.icon || 'notification'} size={18} color="white" />
+                                                                </span>
+                                                                <div className="flex-1 min-w-0">
+                                                                    <div className="flex items-center justify-between gap-2">
+                                                                        <p className={`text-sm font-semibold ${!notification.isRead ? 'text-gray-900' : 'text-gray-500'} truncate`}>
+                                                                            {notification.title}
+                                                                        </p>
+                                                                        {!notification.isRead && (
+                                                                            <span className="flex-shrink-0 w-2 h-2 bg-brand-500 rounded-full" />
+                                                                        )}
+                                                                    </div>
+                                                                    <p className={`text-xs mt-0.5 ${!notification.isRead ? 'text-gray-700' : 'text-gray-500'} leading-snug`}>
+                                                                        {notification.message}
+                                                                    </p>
+                                                                    <p className="text-[10px] text-gray-400 mt-1.5 font-medium">
+                                                                        {formatTimeAgo(notification.timestamp)}
+                                                                    </p>
+                                                                </div>
                                                             </div>
-                                                            <p className={`text-sm mt-1 ${!notification.isRead ? 'text-gray-700' : 'text-gray-500'}`}>
-                                                                {notification.message}
-                                                            </p>
-                                                            <p className="text-xs text-gray-400 mt-2">
-                                                                {formatTimeAgo(notification.timestamp)}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            ))
+                                                        </li>
+                                                    );
+                                                })}
+                                            </ul>
                                         ) : (
-                                            <div className="p-8 text-center text-gray-500">
-                                                <div className="mb-2 flex justify-center">
-                                                    <Icon name="notification" size={48} color="gray" />
+                                            <div className="px-6 py-10 text-center">
+                                                <div className="mb-3 flex justify-center opacity-60">
+                                                    <Icon name="notification" size={56} color="gray" />
                                                 </div>
-                                                <p className="text-sm">Повідомлень немає</p>
+                                                <p className="text-sm font-semibold text-gray-700">Поки тиша</p>
+                                                <p className="text-xs text-gray-500 mt-1">Як з'являться нові повідомлення — побачиш їх тут</p>
                                             </div>
                                         )}
                                     </div>
@@ -238,67 +263,86 @@ const TopHeader = () => {
 
                             {/* Profile Dropdown */}
                             {showProfile && (
-                                <div className="profile-dropdown absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
-                                    <div className="p-4 border-b border-gray-100">
-                                        <div className="flex items-center justify-between">
-                                            <p className="font-semibold text-gray-900">{user?.name}</p>
-                                            {isAdmin() && (
-                                                <span className="text-[10px] font-bold tracking-wide px-2 py-0.5 rounded-full bg-gradient-to-r from-orange-500 to-lime-500 text-white">
-                                                    ADMIN
-                                                </span>
+                                <div className="profile-dropdown absolute right-0 mt-2 w-72 max-w-[calc(100vw-1.5rem)] bg-white/95 backdrop-blur-xl rounded-3xl shadow-lifted border border-cream-200 overflow-hidden z-50">
+                                    <div className="p-4 bg-gradient-to-br from-cream-50 via-white to-cream-50 border-b border-cream-200">
+                                        <div className="flex items-center gap-3">
+                                            {user?.avatarUrl ? (
+                                                <img src={user.avatarUrl} alt="" className="w-12 h-12 rounded-2xl object-cover border-2 border-white shadow-sm" />
+                                            ) : (
+                                                <div className="w-12 h-12 rounded-2xl bg-brand-gradient text-white flex items-center justify-center font-bold text-lg shadow-sm">
+                                                    {user?.name?.charAt(0).toUpperCase() ?? '?'}
+                                                </div>
                                             )}
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex items-center gap-2">
+                                                    <p className="font-bold text-gray-900 truncate">{user?.name}</p>
+                                                    {isAdmin() && (
+                                                        <span className="text-[10px] font-bold tracking-wide px-2 py-0.5 rounded-full bg-gradient-to-r from-orange-500 to-lime-500 text-white shadow-sm">
+                                                            ADMIN
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="text-xs text-gray-500 truncate">{user?.email}</p>
+                                            </div>
                                         </div>
-                                        <p className="text-sm text-gray-500">{user?.email}</p>
                                     </div>
 
                                     <div className="p-2">
                                         {isAdmin() && (
                                             <button
                                                 onClick={handleAdminClick}
-                                                className="w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-orange-50 transition-colors text-left group"
+                                                className="w-full flex items-center gap-3 p-2.5 rounded-2xl hover:bg-orange-50 transition-colors text-left group"
                                             >
-                                                <span className="w-9 h-9 rounded-lg bg-gradient-to-br from-orange-500 to-lime-500 flex items-center justify-center text-white shadow-sm">
+                                                <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500 to-lime-500 flex items-center justify-center text-white shadow-sm flex-shrink-0">
                                                     <Icon name="settings" size={18} color="white" />
                                                 </span>
-                                                <div>
+                                                <div className="min-w-0">
                                                     <p className="text-sm font-semibold text-gray-900 group-hover:text-orange-700">Адмін-панель</p>
-                                                    <p className="text-xs text-gray-500">Користувачі, статистика, модерація</p>
+                                                    <p className="text-xs text-gray-500 truncate">Користувачі та модерація</p>
                                                 </div>
                                             </button>
                                         )}
 
                                         <button
                                             onClick={handleProfileClick}
-                                            className="w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors text-left"
+                                            className="w-full flex items-center gap-3 p-2.5 rounded-2xl hover:bg-cream-50 transition-colors text-left"
                                         >
-                                            <Icon name="settings" size={18} color="gray" />
-                                            <span className="text-sm font-medium text-gray-700">Налаштування профілю</span>
+                                            <span className="w-9 h-9 rounded-xl bg-cream-100 flex items-center justify-center flex-shrink-0">
+                                                <Icon name="settings" size={18} color="gray" />
+                                            </span>
+                                            <span className="text-sm font-semibold text-gray-700">Налаштування профілю</span>
                                         </button>
 
-                                        <div className="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors">
-                                            <Icon name="goal" size={18} color="gray" />
-                                            <div>
-                                                <p className="text-sm font-medium text-gray-700">Денна ціль</p>
+                                        <div className="flex items-center gap-3 p-2.5 rounded-2xl">
+                                            <span className="w-9 h-9 rounded-xl bg-fresh-50 flex items-center justify-center flex-shrink-0">
+                                                <Icon name="goal" size={18} color="green" />
+                                            </span>
+                                            <div className="min-w-0">
+                                                <p className="text-sm font-semibold text-gray-700">Денна ціль</p>
                                                 <p className="text-xs text-gray-500">{user?.dailyCalorieGoal || 2000} ккал</p>
                                             </div>
                                         </div>
 
-                                        <div className="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors">
-                                            <Icon name="weight" size={18} color="gray" />
-                                            <div>
-                                                <p className="text-sm font-medium text-gray-700">Поточна вага</p>
+                                        <div className="flex items-center gap-3 p-2.5 rounded-2xl">
+                                            <span className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
+                                                <Icon name="weight" size={18} color="blue" />
+                                            </span>
+                                            <div className="min-w-0">
+                                                <p className="text-sm font-semibold text-gray-700">Поточна вага</p>
                                                 <p className="text-xs text-gray-500">{user?.weight ? `${user.weight} кг` : 'Не вказано'}</p>
                                             </div>
                                         </div>
                                     </div>
 
-                                    <div className="p-2 border-t border-gray-100">
+                                    <div className="p-2 border-t border-cream-200">
                                         <button
                                             onClick={handleLogout}
-                                            className="w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-red-50 transition-colors text-red-600"
+                                            className="w-full flex items-center gap-3 p-2.5 rounded-2xl hover:bg-red-50 transition-colors text-red-600"
                                         >
-                                            <Icon name="logout" size={18} color="red" />
-                                            <span className="text-sm font-medium">Вийти з акаунту</span>
+                                            <span className="w-9 h-9 rounded-xl bg-red-50 flex items-center justify-center flex-shrink-0">
+                                                <Icon name="logout" size={18} color="red" />
+                                            </span>
+                                            <span className="text-sm font-semibold">Вийти з акаунту</span>
                                         </button>
                                     </div>
                                 </div>
