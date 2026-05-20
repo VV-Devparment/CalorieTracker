@@ -54,6 +54,7 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({ onDetected, o
                             facingMode: 'environment',
                             width: { ideal: 1280 },
                             height: { ideal: 720 },
+                            advanced: [{ focusMode: 'continuous' }]
                         },
                     },
                     videoRef.current!,
